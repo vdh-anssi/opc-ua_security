@@ -227,10 +227,11 @@ event C_Start_Session(channel_, chmode, smode).
 event C_Session(session).
 event S_Session(session).
 event C_Activation_Req(pkey, pkey, chmode, smode, session, login, utoken)
-(*{ if proverif["dev"] }*)
+(*{ if proverif["dev"] or "3.1.E" in queries["list"] or "3.1" in queries["list"] }*)
 (*{ if "3.1.E" in queries["list"] or "3.1" in queries["list"] }*)
 [solveTwice] (*{ else }*) [solveOnce] (*{ endif }*)
-(*{ endif }*).
+ (*{ endif }*)
+.
 
 event C_Activation(pkey, pkey, chmode, smode, session, login, utoken).
 event S_Activation(pkey, pkey, chmode, smode, session, login, utoken).
