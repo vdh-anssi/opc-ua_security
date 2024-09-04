@@ -1,0 +1,78 @@
+(*# - THIS FILE IS A JINJA2 TEMPLATE - #*)
+(* -- THIS FILE WAS GENERATED, DO NOT EDIT -- *)
+
+(* Configuration for opcua.pv *)
+
+(* DEBUG *)
+set movenew = (*< str_of_bool(config["movenew"]) >*).
+(* set ignoreTypes = false. *)
+set verboseClauses = (*< proverif["verboseClauses"] >*).
+(*{ if proverif["verboseRules"] }*)
+set verboseRules = true.
+(*{ endif }*)
+(*{ if not proverif["reconstructTrace"] }*)
+set reconstructTrace = false.
+(*{ endif }*)
+set removeEventsForLemma = false.
+
+(*{ if proverif["dev"] }*)
+set noselectIgnoreConclusion = false.
+(*{ endif }*)
+
+(* Channels: allowed ciphers *)
+type cryptography.
+const RSA: cryptography.
+const ECC: cryptography.
+const any: cryptography.
+
+letfun allowed_crypto(c: cryptography) =
+  ((*{ for crypto in config["crypto"] }*)c = (*< crypto >*)(*{ if not loop.last }*) || (*{ endif }*)(*{ endfor }*)).
+
+
+(* Channels: allowed security modes *)
+type chmode.
+const None   : chmode. (* Unsecure       *)
+const Sign   : chmode. (* Sign only      *)
+const Encrypt: chmode. (* Sign & Encrypt *)
+
+letfun allowed_channel(m: chmode) =
+  ((*{ for mode in config["chmode"] }*)m = (*< mode >*)(*{ if not loop.last }*) || (*{ endif }*)(*{ endfor }*)).
+
+
+(* Channels: allow reopening to renew symmetric keys *)
+letfun reopening_allowed() = (*< str_of_bool(config["reopen"]) >*).
+
+
+(* Sessions: allowed security modes *)
+type smode.
+const SNone: smode. (* No checks             *)
+const SNoAA: smode. (* checks on client side *)
+const SSec : smode. (* checks on both sides  *)
+
+letfun allowed_session(m: smode) =
+  ((*{ for mode in config["semode"] }*)m = (*< mode >*)(*{ if not loop.last }*) || (*{ endif }*)(*{ endfor }*)).
+
+
+(* User Authentication Token *)
+type utoken.
+const user_none: utoken. (* only for unactivated sessions *)
+const user_anon: utoken. (* anonymous user *)
+const user_pwd : utoken. (* login and password *)
+const user_cert: utoken. (* user certificate   *)
+
+letfun allowed_token(t: utoken) =
+  ((*{ for token in config["utoken"] }*)t = user_(*< token >*)(*{ if not loop.last }*) || (*{ endif }*)(*{ endfor }*)).
+
+
+(* Sessions: allow switching the session to another channel *)
+letfun switching_allowed() = (*< str_of_bool(config["switch"]) >*).
+
+
+(* Allow the leaking of secret keys *)
+type leak_kind.
+const no_leaks: leak_kind. (* dummy *)
+const ch_leaks: leak_kind. (* channel keys *)
+const lt_leaks: leak_kind. (* long term keys *)
+
+letfun allowed_leak(l: leak_kind) =
+  ((*{ for leak in config["leaks"] }*)l = (*< leak >*)(*{ if not loop.last }*) || (*{ endif }*)(*{ endfor }*)).

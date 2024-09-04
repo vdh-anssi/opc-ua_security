@@ -1,0 +1,65 @@
+(* Configuration for opcua.pv *)
+(* ECC|RSA, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, no_switch, no_leaks *)
+
+(* DEBUG *)
+(* set ignoreTypes = false. *)
+(* set verboseClauses = explained. *)
+(* set verboseClauses = short. *)
+(* set verboseRules = true. *)
+(* set reconstructTrace = false. *)
+set removeEventsForLemma = true.
+
+(* Channels: allowed ciphers *)
+type cryptography.
+const RSA: cryptography.
+const ECC: cryptography.
+const any: cryptography.
+
+letfun allowed_crypto(c: cryptography) =
+   (c = ECC || c = RSA).
+
+(* Channels: allowed security modes *)
+type chmode.
+const None   : chmode. (* Unsecure       *)
+const Sign   : chmode. (* Sign only      *)
+const Encrypt: chmode. (* Sign & Encrypt *)
+
+letfun allowed_channel(m: chmode) =
+   (m = None || m = Sign || m = Encrypt).
+
+(* Channels: allow reopening to renew symmetric keys *)
+letfun reopening_allowed() = true.
+
+(* Sessions: allowed security modes *)
+type smode.
+const SNone: smode. (* No checks             *)
+const SNoAA: smode. (* checks on client side *)
+const SSec : smode. (* checks on both sides  *)
+
+letfun allowed_session(m: smode) =
+   (m = SNoAA || m = SSec).
+
+(* User Authentication Token *)
+type utoken.
+const user_none: utoken.
+const user_anon: utoken.
+const user_pwd : utoken.
+const user_cert: utoken.
+
+letfun allowed_token(t: utoken) =
+   (t = user_anon || t = user_pwd || t = user_cert).
+
+(* Sessions: allow switching the session to another channel *)
+letfun switching_allowed() = false.
+
+(* Allow the leaking of private keys *)
+letfun allow_leaks = false.
+
+(* Allow the leaking of secret keys *)
+type leak_kind.
+const no_leaks: leak_kind. (* dummy *)
+const ch_leaks: leak_kind. (* channel keys *)
+const lt_leaks: leak_kind. (* long term keys *)
+
+letfun allowed_leak(l: leak_kind) =
+   (l = no_leaks).
