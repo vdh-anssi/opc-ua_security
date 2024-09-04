@@ -62,8 +62,8 @@ The attack is found and reconstructed in less than 20s.
 §5.6 Risk of Signature Oracle:
 `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None, no_reopen, SNoAA, pwd, no_switch, lt_leaks" --oracle --html`
 open the file `output/trace1.pdf`
-The attack is found and reconstructed in less than 2m.
-`--oracle` indicates that the certificate is not parsed (leading to the signature oracle), as tolerated by the OPC-UA specification in version 1.05.03. 
+The attack is found and reconstructed in less than 32m.
+`--oracle` indicates that the client certificate is not parsed (leading to the signature oracle), as tolerated by the OPC-UA specification for "No Application Authentication" in version 1.05.03.
 
 
 # To reproduce the security proofs for our fixes
@@ -75,14 +75,13 @@ Verification times are indicative and may vary depending on your machine.
 ##  For the weakened property Agr-[S->C]
 Property "3.1" refers to the weakened Agr-[S->C] (to tolerate the KCI attack and race condition.)
 As explained in the paper, we use a series of lemmas and advanced techniques that depend on the set of sub-lemmas that need to be proven.
-As a result, one need to prove the following queries: "3.1.axioms", "3.1.axioms.1", "3.1.A", "3.1.B", "3.1.C", "3.1.D", "3.1.E", and finally "3.1" that relies on all of those other lemmas.
+As a result, one need to prove the following queries: "3.1.axioms", "3.1.axioms.1", "3.1.A", "3.1.B", "3.1.D", "3.1.E", and finally "3.1" that relies on all of those other lemmas. (Note that "3.1.C" is a syntactic axiom.)
 
 Proofs for this property requires to first prove a number of lemmas that we assume (axioms) during the proof of the weakened Agr[S->C].
 `$ python3 opcua.py --dev -q "3.1.axioms" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
 `$ python3 opcua.py --dev  -q "3.1.axioms.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
 `$ python3 opcua.py --dev  -q "3.1.A" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
 `$ python3 opcua.py --dev  -q "3.1.B" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
-`$ python3 opcua.py --dev  -q "3.1.C" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1s)
 `$ python3 opcua.py --dev  -q "3.1.D" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
 `$ python3 opcua.py --dev  -q "3.1.E" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
 `$ python3 opcua.py --dev  -q "3.1"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
@@ -119,7 +118,7 @@ Configuration with long-term key leaks, but no channel leaks:
 `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, Encrypt, no_reopen, SSec, pwd, no_switch, lt_leaks"` (1s)
 Password confidentiality when no signature oracle is allowed (i.e., we enforce parsing of certificates even when SessionSecurity includes SNoAA):
 `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None, reopen, SNoAA|SSec, pwd, switch, lt_leaks"`: (3s)
-`$ python3 opcua.py -q "Conf[Pwd]" -c "RSA|ECC, Sign|Encrypt, reopen, SNoAA, pwd, switch, no_leaks"` (10s)
+`$ python3 opcua.py -q "Conf[Pwd]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA, pwd, switch, no_leaks"` (24s)
 
 
 # Instructions to launch lattice exploration campaigns

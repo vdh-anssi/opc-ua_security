@@ -32,7 +32,14 @@ Configuration with long-term key leaks, but no channel leaks:
 `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, Encrypt, no_reopen, SSec, pwd, no_switch, lt_leaks"` (1s)
 Password confidentiality when no signature oracle is allowed (i.e., we enforce parsing of certificates even when SessionSecurity includes SNoAA):
 `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None, reopen, SNoAA|SSec, pwd, switch, lt_leaks"`: (3s)
-`$ python3 opcua.py -q "Conf[Pwd]" -c "RSA|ECC, Sign|Encrypt, reopen, SNoAA, pwd, switch, no_leaks"` (10s)
+`$ python3 opcua.py -q "Conf[Pwd]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA, pwd, switch, no_leaks"` (24s)
+
+We additionally report on two other results that require more time:
+`$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None|Encrypt|Sign, reopen, SNoAA, pwd, no_switch, lt_leaks"` --> running Cassis TODO
+`$ python3 opcua.py -q "Conf[Pwd]" -c "RSA, None|Encrypt|Sign, reopen, SNoAA, pwd, no_switch, lt_leaks"` --> running Cassis TODO
+TODO: we obtained ECC|RSA, Encrypt|None, reopen, SNoAA, pwd, no_switch, lt_leaks: TRUE  02h 20m so I hope we can obtain the the two above.
+For password confidentiality, we make the meta argument that the `SNoAA` yields strictly more executions than `SNoAA` and equally many executions than `SSec|SNoAA` hence we limit ourselves to `SNoAA` (even though we conjecture such configurations could be proven with more time).
+
 
 # Agreement Properties
 As mentioned in the paper, the agreement properties are much more complex to prove. They rely on more complex injective agreement properties but more importantly, we had to weaken them, which resulted in much more complicated queries with a lot of side-conditions to take into account the residual risks.
@@ -64,6 +71,40 @@ The claim 2. is supported by the results we obtained through lattice exploration
 TODO1: <insert here campaign results for 3.1, 3.1.B, 3.1.E, 3.1.axioms, 3.1.axioms.1
 TODO2: Then we need to compute ourselves some configurations
 capturing rich config tu support claim 2. for: 3.1.A, 3.1.C, 3.1.D, 3.1.
+
+
+Query: 3.1.D
+
+Configuration: ECC, Sign, reopen, SNoAA, cert|pwd|anon, no_switch, no_leaks
+Running time: 01m 01s
+
+Configuration: RSA, Sign|Encrypt|None, reopen, SNoAA|SSec, cert|pwd|anon, no_switch, no_leaks
+Running time: 05m 30s
+
+Configuration: ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks
+Running time: 00m 03s
+
+Configuration: ECC, Sign|Encrypt, no_reopen, SNoAA|SSec, pwd, no_switch, lt_leaks
+Running time: 27m 27s
+
+Configuration: RSA, Sign|Encrypt, reopen, SNoAA|SSec, pwd, no_switch, lt_leaks
+Running time: 02m 29s
+
+Configuration: RSA, Sign|Encrypt|None, reopen, SNoAA|SSec, cert, no_switch, lt_leaks
+Running time: 00m 38s
+
+Configuration: RSA, Sign|Encrypt|None, reopen, SNoAA|SSec, anon, no_switch, lt_leaks
+Running time: 00m 25s
+
+Configuration: RSA, Sign|None, no_reopen, SNoAA|SSec, pwd, switch, lt_leaks
+Running time: 07m 54s
+
+Configuration: RSA, Sign|None, no_reopen, SNoAA|SSec, cert, switch, lt_leaks
+Running time: 00m 09s
+
+Configuration: RSA, Sign|None, no_reopen, SNoAA|SSec, anon, switch, lt_leaks
+Running time: 00m 07s
+
 
 ##  Campaign results for the weakened property Agr-[C->S]
 TODO3: <insert here campaign results for 3.2, 3.2.A, 3.2.axioms
