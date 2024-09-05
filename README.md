@@ -78,22 +78,21 @@ As explained in the paper, we use a series of lemmas and advanced techniques tha
 As a result, one need to prove the following queries: "3.1.axioms", "3.1.axioms.1", "3.1.A", "3.1.B", "3.1.D", "3.1.E", and finally "3.1" that relies on all of those other lemmas. (Note that "3.1.C" is a syntactic axiom.)
 
 Proofs for this property requires to first prove a number of lemmas that we assume (axioms) during the proof of the weakened Agr[S->C].
- - `$ python3 opcua.py --dev -q "3.1.axioms" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py --dev  -q "3.1.axioms.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py --dev  -q "3.1.A" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py --dev  -q "3.1.B" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
- - `$ python3 opcua.py --dev  -q "3.1.D" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py --dev  -q "3.1.E" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
- - `$ python3 opcua.py --dev  -q "3.1"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
-(The option `--dev` indicates that the latest ProVerif features available in the aforementioned development version are required.)
+ - `$ python3 opcua.py -q "3.1.axioms" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
+ - `$ python3 opcua.py -q "3.1.axioms.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
+ - `$ python3 opcua.py -q "3.1.A" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
+ - `$ python3 opcua.py -q "3.1.B" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
+ - `$ python3 opcua.py -q "3.1.D" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
+ - `$ python3 opcua.py -q "3.1.E" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
+ - `$ python3 opcua.py -q "3.1"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
 As we are able to prove this main query "3.1" corresponding to Agr-[S->C], we show that our fixes resolve the attack that was found in the same configurations. Other configurations can be proven too (see `results.md`).
 
 ##  For the weakened property Agr-[C->S]
 Similarly, the query "3.2" relies on "3.2.axioms", "3.2.A" and all "3.1.*" queries discussed above.
 One should launch:
- - `$ python3 opcua.py --dev  -q "3.2.axioms" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py --dev  -q "3.2.A"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py --dev  -q "3.2"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (2m)
+ - `$ python3 opcua.py -q "3.2.axioms" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
+ - `$ python3 opcua.py -q "3.2.A"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
+ - `$ python3 opcua.py -q "3.2"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (2m)
 As we are able to prove this main query "3.2" corresponding to Agr-[C->S], we show that our fixes resolve the attack that was found in the same configurations. Other configurations can be proven too (see `results.md`).
 
 ## For the property Conf[C]:
