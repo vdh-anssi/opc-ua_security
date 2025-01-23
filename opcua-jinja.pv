@@ -1,11 +1,13 @@
+(*# - THIS FILE IS A JINJA2 TEMPLATE - #*)
+(* -- THIS FILE WAS GENERATED, DO NOT EDIT -- *)
 (* -lib config.pvl *)
 
 (******************************************************************************
-   Formal model of the OPC-UA protocol v1.05.03 and v1.05.04 RC.
+   Formal model of the OPC UA protocol v1.05.03 and v1.05.04 RC.
    Description of the protocol, threat model, security objectives and analysis
    results are in the companion technical report:
-            "A Comprehensive Formal Security Analysis of OPC-UA"
-   by [authors' names were redacted].
+            "A Comprehensive Formal Security Analysis of OPC UA"
+   by [authors' names were retracted].
    See README.md for more information about how to run this file.
 ******************************************************************************)
 
@@ -74,8 +76,6 @@ fun  enc_key_RSA(nonce, nonce): sekey.
 fun sign_key_RSA(nonce, nonce): sskey.
 fun  enc_key_ECC(G, G, G): sekey.
 fun sign_key_ECC(G, G, G): sskey.
-fun  enc_key_pwd_ECC(G, pkey, pkey): sekey.
-fun sign_key_pwd_ECC(G, pkey, pkey): sskey.
 fun nonce_from_hk(G):           nonce [typeConverter].
 fun hk_from_nonce(nonce):           G [typeConverter].
 fun hk_from_bits (bitstring):       G [typeConverter].
@@ -99,7 +99,6 @@ const anonymous: login.
 type psswrd.
 const no_pwd: psswrd.
 fun pwd_of(login):psswrd [private].
-fun encode(psswrd): bitstring [typeConverter].
 fun sk_of(login): skey [private].
 
 (* PKI *)
@@ -178,7 +177,6 @@ letfun get_hk(ek: ephkey, pk: pkey) =
    let Ephemeral(signed_hk: bitstring) = ek in
    if acheck(signed_hk, pk) then hk_from_bits(aread(signed_hk)).
 
-
 (* session sub-protocol *)
 fun SessionReq (bitstring): bitstring [data]. (* nonce, certificate, simplified to a bitstring (use pair instead) for signature oracle *)
 fun SessionResp(ephkey, seid, stoken, nonce, certificate, bitstring): bitstring [data].
@@ -212,7 +210,7 @@ event leaked(pkey).                  (* ... until it leaked.                   *
 event leaked_server(pkey).
 event leak_ch(pkey, chkeys).
 event new_user(login, psswrd, skey, pkey, certificate).
-event used(psswrd, cryptography, chmode, smode).
+event used(pkey, login, psswrd, cryptography, chmode, smode, bitstring).
 event sec(pkey, pkey, bitstring).    (* secret shared by pk_1 to pk_2          *)
 event secret_exp(exponent).
 event secret_nonce(pkey, pkey, nonce, chmode).
@@ -228,15 +226,11 @@ event C_Session(session).
 event S_Session(session).
 event C_Activation_Req(pkey, pkey, chmode, smode, session, login, utoken)
 (*{ if "3.1.E" in queries["list"] or "3.1" in queries["list"] }*)
-[solveTwice] (*{ else }*) [solveOnce] (*{ endif }*)
-.
+[solveOnce] (*{ else }*) [solveOnce] (*{ endif }*).
 
 event C_Activation(pkey, pkey, chmode, smode, session, login, utoken).
 event S_Activation(pkey, pkey, chmode, smode, session, login, utoken).
-event C_First_Activation(session, login).
 event S_First_Activation(session, login, nonce).
-event C_Reactivation(session, login, login).
-event S_Reactivation(session, login, login).
 event S_Switching(session, chid, chid).
 event C_User_Request (pkey, pkey, chmode, session, login, pkey, nonce).
 event S_User_Request (pkey, pkey, chmode, session, login, pkey, nonce).
@@ -255,11 +249,15 @@ event S_RSA_finished.
 event C_RSA_started_secure_channel.
 event S_open_channel(chid, chmode, cryptography, bool). (* bool: true when reopen *)
 event C_open_channel(chid, chmode, cryptography, bool). (* bool: true when reopen *)
+event S_reopened(channel_).
+event C_reopened(channel_).
 event C_Created_Session(stoken, smode).
 event S_Created_Session(stoken, smode).
 event C_Activated_Session(stoken, utoken).
 event C_Switched_Session(stoken, utoken).
 event S_Activated_Session(stoken, utoken).
+event C_switched(stoken, channel_).
+event S_switched(stoken, channel_).
 event C_Request(login, nonce, nonce).
 event S_Request(login, nonce, nonce).
 event C_Reached(bitstring).
@@ -276,13 +274,13 @@ event insert_C_sessions(pkey, pkey, seid, stoken, smode, channel_, login, utoken
 (*{ if "3.1.C" in queries["list"] }*)
 [solveOnce]
 (*{ elif "3.1.B" in queries["list"] }*)
-[solveTwice]
+[solveOnce]
 (*{ endif }*).
 event insert_S_sessions(pkey, pkey, seid, stoken, smode, channel_, login, utoken, exponent, nonce)
 (*{ if "3.1.C" in queries["list"] }*)
 [solveOnce]
 (*{ elif "3.1.B" in queries["list"] }*)
-[solveTwice]
+[solveOnce]
 (*{ endif }*).
 
 
@@ -299,10 +297,12 @@ letfun replacePayload(CH_m: bitstring, cipher: bitstring) =
    let CH(header: CH_header, MSG_req (rqid: nonce, request: bitstring))                = CH_m in CH(header, CH_req_c (cipher)) else (
    let CH(header: CH_header, MSG_resp(rqid: nonce, response: bitstring))               = CH_m in CH(header, CH_resp_c(cipher))
       ))).
+
 (* Returns the payload of a MSG/OPN request/response *)
-letfun get_payload(payload: CH_payload) =
-   let CH_req_c (p: bitstring) = payload in p else (
-   let CH_resp_c(p: bitstring) = payload in p ).
+letfun get_payload(isClient: bool, payload: CH_payload) =
+if isClient
+   then (let CH_resp_c(p: bitstring) = payload in p)
+   else (let CH_req_c (p: bitstring) = payload in p).
 
 (* Asymmetric encryption with signature                    *)
 (* None: header,                      body                 *)
@@ -315,7 +315,7 @@ letfun CH_sign_enc(CH_m: bitstring, mode: chmode, crypto: cryptography, E_sk: sk
    else let sigma = asign(CH_m, E_sk) in
    if crypto = ECC then (  (* in RSA, OPN payloads are always encrypted, even in mode=Sign. In ECC, payloads are never encrypted. *)
          replacePayload(CH_m, sigma)  (* returns CH_m whose plaintext is replaced by the signed message (plaintext can be retrieved with aread) *)
-   ) else ( (* crypto = RSA *)
+   ) else if crypto = RSA then (
       let cipher = aenc(sigma, R_pk) in
          replacePayload(CH_m, cipher)
    ).
@@ -323,12 +323,12 @@ letfun CH_sign_enc(CH_m: bitstring, mode: chmode, crypto: cryptography, E_sk: sk
 letfun CH_check_dec(CH_m: bitstring, mode: chmode, crypto: cryptography, R_sk: skey, E_pk: pkey) =
    let CH(head: CH_header, payload: CH_payload) = CH_m in
    if mode = None then (CH_m) (* no check and returns in plaintext *)
-   else let load = get_payload(payload) in
+   else let load = get_payload(true, payload) in
    if crypto = ECC then (
      if acheck(load, E_pk) then
         let CH(=head, body: CH_payload) = aread(load) in
         aread(load) (* returns sign-checked message *)
-   ) else ( (* crypto = RSA *)
+   ) else if crypto = RSA then (
      let plainPayload = adec(load, R_sk) in
      if acheck(plainPayload, E_pk) then
         let CH(=head, body: CH_payload) = aread(plainPayload) in
@@ -344,23 +344,24 @@ letfun CH_check_dec(CH_m: bitstring, mode: chmode, crypto: cryptography, R_sk: s
 letfun CH_mac_enc(CH_m: bitstring, mode: chmode, ek: sekey, mk: sskey) =
    let CH(header: CH_header, payload: CH_payload) = CH_m in
    if mode = None then (CH_m) (* returns in plaintext *)
+   (* returns CH_m whose plaintext is replaced by the ssigned message (plaintext can be retrieved with sread) *)
    else let sigma = ssign(CH_m, mk) in
-   if mode = Sign then (
-        replacePayload(CH_m, sigma)  (* returns CH_m whose plaintext is replaced by the ssigned message (plaintext can be retrieved with sread) *)
-   ) else ( (* mode = Encrypt *)
+   if mode = Sign then (replacePayload(CH_m, sigma)) else
+   if mode = Encrypt then (
       let cipher = (*{ if authenticated }*) sa_enc_sign(header, payload, ek) (*{ else }*) senc(sigma, ek) (*{ endif }*) in
       replacePayload(CH_m, cipher)
    ).
 
-letfun CH_mac_dec(CH_m: bitstring, mode: chmode, ek: sekey, mk: sskey) =
+letfun CH_mac_dec(isClient: bool, CH_m: bitstring, mode: chmode, ek: sekey, mk: sskey) =
    let CH(MSG_header(id: chid, tok: chtoken), payload: CH_payload) = CH_m in
    if mode = None then (CH_m) (* no check and returns in plaintext *)
-   else let load = get_payload(payload) in
+   else let load = get_payload(isClient, payload) in
    if mode = Sign then (
       if scheck(load, mk) then
       let CH(MSG_header(=id, =tok), body: CH_payload) = sread(load) in
       sread(load) (* returns ssign-checked message *)
-   ) else ( (* mode = Encrypt *)
+   ) else (
+      if mode = Encrypt then
       (*{ if not authenticated }*)
       let plainPayload = sdec(load, ek) in
       if scheck(plainPayload, mk) then
@@ -408,20 +409,20 @@ letfun CH_send(isClient: bool, E_cert: certificate, R_cert: certificate, mode: c
       CH_mac_enc(CH_m, mode, ek, mk).
 
 (*  For client/server receiving a messages on a channel *)
-letfun CH_rcv(isClient: bool, mode: chmode, id: chid, symkeys: chkeys, msg:bitstring) =
+letfun CH_rcv(isClient: bool, mode: chmode, id: chid, symkeys: chkeys, msg: bitstring) =
    let (token: chtoken, C_enc_k: sekey, C_sign_k: sskey, S_enc_k: sekey, S_sign_k: sskey) =
       if mode = None then (no_token, no_ek, no_mk, no_ek, no_mk)
                      else (let keys(tk: chtoken, cek: sekey, cmk: sskey, sek: sekey, smk: sskey) = symkeys in
                           (tk, cek, cmk, sek, smk)) in
    let CH(MSG_header(=id, =token), pay: CH_payload)  = msg in
    let (ek: sekey, mk: sskey) = if isClient then (S_enc_k, S_sign_k) else (C_enc_k, C_sign_k) in
-   let rcv_checked = CH_mac_dec(msg, mode, ek, mk) in
+   let rcv_checked = CH_mac_dec(isClient, msg, mode, ek, mk) in
    let CH(MSG_header(=id, =token), payload: CH_payload) = rcv_checked in
    if isClient
-      then (let MSG_resp(reqId: nonce, response: bitstring) = payload in (reqId, response)) (* client expect to receive MSG_resp *)
-      else (let MSG_req (reqId: nonce, request:  bitstring) = payload in (reqId, request )).(* client expect to receive MSG_req *)
+      then (let MSG_resp(reqId: nonce, response: bitstring) = payload in (reqId, response)) (* client expects a response *)
+      else (let MSG_req (reqId: nonce, request:  bitstring) = payload in (reqId, request )).(* server expects a request  *)
 
-(* Handling the special case of channel receive from servers *)
+(* Handling the special case of a server receiving a message on a channel *)
 letfun S_rcv(S_cert: certificate, msg: bitstring) =
    let CH(MSG_header(id: chid, token: chtoken), pay: CH_payload) = msg in
    get S_channels(C_cert: certificate, =S_cert, mode: chmode, =id, symkeys: chkeys) suchthat allowed_channel(mode) in
@@ -451,30 +452,24 @@ let Create_Session (C_sk: skey, SC: channel_, check: smode) =
    if get_pk(C_cert) = pk(C_sk) then
    let key_tk = (if mode = None then no_token else (
       let keys(key_tk: chtoken, w: sekey, x: sskey, y: sekey, z: sskey) = symkeys in (key_tk) )) in
-   (* The OPCUA specifications (4:§5.6.2.1 and 7:§5.3 table 11) tolerate no application authentication
-    * in two cases :
-    * 1. if the channel is unsecure (but some server can still enforce application authentication)
-    * 2. if the server explicitly desactivates application authentication.
-    * If application authentication is checked then we need to
-    *  - verify the application certificate given by the client.
-    *  - verify the signature. *)
-   (* We simplify here and demand application authentication if and only if check = SSec *) 
+   (* If application authentication is enabled, we need to:
+    * - provide an client application certificate and an fresh nonce
+    * - verify the signature returned by the server.*)
+   (* Application authentication on client side is always enabled unless check = SNone *)
    new RqID[key_tk, check]: nonce; out(c, RqID); (* the request number is predictable *)
    let C_pk = get_pk(C_cert) in
    let S_pk = get_pk(S_cert) in
    event C_Start_Session(SC, mode, check);
    let crypto = get_crypto(S_cert) in
-
-   (* Application Authentication checks *)
    new C_nonce[C_pk, ch]: nonce;
    let Req = (
       if check = SNone then SessionReq((no_nonce, null_cert))
                        else SessionReq((C_nonce, C_cert))) in
    out(c, CH_send(true, C_cert, S_cert, mode, ch, symkeys, RqID, Req));
-
    in(c, raw: bitstring);
    let (=RqID, response: bitstring) = CH_rcv(true, mode, ch, symkeys, raw) in
    let SessionResp(S_ek: ephkey, id: seid, token: stoken, S_nonce: nonce, S_app_cert: certificate, signature: bitstring) = response in
+   (* Application Authentication checks *)
    if (check = SNone || S_app_cert = S_cert) then
    let S_hk = (
       if crypto = RSA then no_hk else
@@ -493,25 +488,23 @@ let Create_Session (C_sk: skey, SC: channel_, check: smode) =
 (* Open or Reopen a Channel and then create a session *)
 
 let Open_Channel_Create_Session (C_cert,S_cert: certificate, C_sk: skey, mode: chmode, id: chid, check: smode) =
-   (* Simplification here: since there is no redirection to keys, keys used in sessions are not updated after a reopen *)
-   (* we can create a new session for "old channels" that we reopen, by renewing the keys *)
-   (* but we can't reopen a channel once a session is created, just to renew the keys *)
    let C_pk = get_pk(C_cert) in
    let S_pk = get_pk(S_cert) in
-   new RqID    [C_pk, S_pk, mode, id] : nonce;  (* C_pk is NOT implicit *)
+   new RqID    [C_pk, S_pk, mode, id]: nonce;  (* C_pk is NOT implicit *)
    out(c, RqID); (* Request Id is predictable *)
-   (*{ if "3.1.axioms" in queries["list"] }*)
-   new C_Nonce [S_pk, id, mode] : nonce;   (* RSA *)
+   (*{ if "3.1.axioms" or "3.1.confusion" in queries["list"] }*)
+   new C_Nonce [S_pk, id, mode]: nonce;   (* RSA *)
+   new C_Secret[S_pk, id, mode]: exponent;(* ECC *)
    (*{ else }*)
-   new C_Nonce [S_pk, id] : nonce;         (* RSA *)
+   new C_Nonce [S_pk, id]: nonce;         (* RSA *)
+   new C_Secret[S_pk, id]: exponent;      (* ECC *)
    (*{ endif }*)
-   new C_Secret[S_pk, id] : exponent;      (* ECC *)
    event secret_exp(C_Secret);
    let crypto = get_crypto(S_cert) in
    let is_reopen = id <> NewCh in
 
    (* Checking first opening or reopening allowed and existing old channel *)
-   if not(is_reopen) || (reopening_allowed() && (mode <> None)) then   
+   if not(is_reopen) || (reopening_allowed() && (mode <> None)) then
    let _ = (if is_reopen then (get C_channels(=C_cert, =S_cert, =mode, =id, O_keys: chkeys) in ()) else ()) in
 
    (* Sending OPN request *)
@@ -557,22 +550,26 @@ let Open_Channel_Create_Session (C_cert,S_cert: certificate, C_sk: skey, mode: c
    (* Events *)
    event fresh_C_nonce(bits_from_nonce(C_nonce_or_hk), S_nonce_or_hk);
    event sec(C_pk, S_pk, bits_from_nonce(C_nonce_or_hk));
-   event secret_nonce(C_pk, S_pk, C_Nonce, mode); (* Before it was only triggered in mode Sign | encrypt; added mode argument to allow conditioning *)
+   event secret_nonce(C_pk, S_pk, C_Nonce, mode);
    event new_keys(C_pk, S_pk, crypto, sym_keys);  (* Queries using new_keys should be conditioned with `symkeys <> no_keys` *)
    event Channel(C_pk, S_pk, crypto, mode, ch_s);
    event C_Channel(chan(C_cert, S_cert, mode, ch_s, sym_keys));
    event C_open_channel(ch_s, mode, crypto, is_reopen);
    insert C_channels(C_cert, S_cert, mode, ch_s, sym_keys);
    ( !Create_Session(C_sk, chan(C_cert, S_cert, mode, ch_s, sym_keys), check)
-(* Propagate reopened channels used by existing sessions *) 
+   (* Propagate reopened channels used by existing sessions *)
    | if is_reopen then (
-       !(get C_sessions(=C_pk,=S_pk, sessid: seid, SAtoken: stoken, check2: smode,
-                     chan(=C_cert, =S_cert, =mode, =ch_s, O_keys: chkeys),
-                     O_usr: login, O_tk: utoken, O_hk: G, O_nonce: nonce, =C_sk) in
-         insert C_sessions(C_pk,S_pk, sessid, SAtoken, check2,
-                     chan(C_cert, S_cert, mode, ch_s, sym_keys), (* key update *)
-                     O_usr, O_tk, O_hk, O_nonce, C_sk)))
-(* Channel leaks *)
+       !(get C_sessions(=C_pk, =S_pk, sessid: seid, SAtoken: stoken, check2: smode,
+            chan(=C_cert, =S_cert, =mode, =ch_s, O_keys: chkeys),
+            O_usr: login, O_tk: utoken, O_hk: G, O_nonce: nonce, =C_sk) in
+         event C_reopened(chan(C_cert, S_cert, mode, ch_s, sym_keys));
+         event insert_C_sessions(C_pk,S_pk, sessid, SAtoken, check2,
+            chan(C_cert, S_cert, mode, ch_s, sym_keys), (* key update *)
+            O_usr, O_tk, O_hk, O_nonce, C_sk);
+         insert C_sessions(C_pk, S_pk, sessid, SAtoken, check2,
+            chan(C_cert, S_cert, mode, ch_s, sym_keys), (* key update *)
+            O_usr, O_tk, O_hk, O_nonce, C_sk)))
+   (* Channel leaks *)
    | (if allowed_leak(ch_leaks) then event leak_ch(C_pk, sym_keys); out(c, sym_keys))
    ).
 
@@ -580,11 +577,11 @@ let Open_Channel_Create_Session (C_cert,S_cert: certificate, C_sk: skey, mode: c
 
 let Activate_Session (usr: login, U_tk: utoken, U_pwd: psswrd, U_sk: skey, U_cert: certificate) =
    get C_sessions(C_pk,S_pk: pkey, id: seid, SAtoken: stoken, check: smode, SC: channel_,
-                  O_usr: login, O_tk: utoken, O_hk: G, O_nonce: nonce, C_sk: skey)
+                  =anonymous, =user_none, O_hk: G, O_nonce: nonce, C_sk: skey)
    suchthat allowed_session(check) in
    let chan(C_cert,S_cert: certificate, mode: chmode, ch: chid, symkeys: chkeys) = SC in
    if C_pk = get_pk(C_cert) && S_pk = get_pk(S_cert) then
-   new RqID[id, usr, U_tk] : nonce;
+   new RqID[id, usr, U_tk]: nonce;
    out(c, RqID);
    let crypto = get_crypto(S_cert) in
    if allowed_crypto(crypto) then
@@ -593,25 +590,25 @@ let Activate_Session (usr: login, U_tk: utoken, U_pwd: psswrd, U_sk: skey, U_cer
    (* user "anonymous" is reserved to the user_anon authentication *)
    if (U_tk = user_anon && usr = anonymous) || (U_tk <> user_anon && usr <> anonymous) then
    let credential = (* password *)
-       if U_tk <> user_pwd then void else
-       if (mode = Encrypt) || (mode = None && check = SNone) then (O_nonce, U_pwd) else (
-       if crypto = RSA then (
-          new U_pek[C_pk]: sekey;
-          new U_psk[C_pk]: sskey;
-          (ssign( (aenc( (U_pek, U_psk), S_pk), O_nonce, senc(encode(U_pwd), U_pek)), U_psk))
-       ) else
-       if crypto = ECC then (
-          new es_a[C_pk]: exponent;
-          event secret_exp(es_a);
-          let U_hk = exp(g, es_a) in
-          let sh_k = exp(O_hk, es_a) in
-          let U_pek =  enc_key_pwd_ECC(sh_k, C_pk, S_pk) in
-          let U_psk = sign_key_pwd_ECC(sh_k, C_pk, S_pk) in
-          (ssign( (U_hk, O_hk, O_nonce, senc(encode(U_pwd), U_pek)), U_psk)))
+      if U_tk <> user_pwd then void else
+      if (mode = Encrypt) || (mode = None && check = SNone) then (O_nonce, U_pwd) else
+      if (mode = Sign)    || (mode = None && (check = SNoAA || check = SSec)) then (
+      if crypto = RSA then (
+         new U_pek[C_pk]: sekey;
+         new U_psk[C_pk]: sskey; (* iv is not taken into account, and we use h(S_pk) instead of h(S_cert) *)
+         (ssign( (h(S_pk), aenc( (U_pek, U_psk), S_pk), senc((O_nonce, U_pwd), U_pek)), U_psk))
+      ) else
+      if crypto = ECC then (
+         new es_a[C_pk]: exponent;
+         event secret_exp(es_a);
+         let U_hk = exp(g, es_a) in
+         let sh_k = exp(O_hk, es_a) in
+         let U_pek = enc_key_ECC(U_hk, O_hk, sh_k) in
+         (asign( (C_cert, U_hk, O_hk, senc((O_nonce, U_pwd), U_pek)), C_sk)))
    ) in
    let ActivateRequest = (* Activate request. *)
       if U_tk = user_anon then ActivateReq(SAtoken, signature, user_anon, anonymous, void) else
-      if U_tk = user_pwd  then event used(U_pwd, crypto, mode, check);
+      if U_tk = user_pwd  then event used(C_pk, usr, U_pwd, crypto, mode, check, credential);
                                ActivateReq(SAtoken, signature, user_pwd,  usr, credential) else
       if U_tk = user_cert then ActivateReq(SAtoken, signature, user_cert, usr,
          (*{ if KCI }*) (U_cert, asign( (S_cert, O_nonce),       U_sk))
@@ -628,15 +625,8 @@ let Activate_Session (usr: login, U_tk: utoken, U_pwd: psswrd, U_sk: skey, U_cer
    ) in
    event C_Activated_Session(SAtoken, U_tk);
    event C_Activation(C_pk, S_pk, mode, check, C_sess, usr, U_tk);
-   if O_tk = user_none then
-      event C_First_Activation(C_sess, usr);
-      event insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, S_hk, S_nonce, C_sk);
-      insert C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, S_hk, S_nonce, C_sk)
-   else
-      event C_Reactivation(C_sess, O_usr, usr);
-      event insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, S_hk, S_nonce, C_sk);
-      insert C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, S_hk, S_nonce, C_sk)
-   .
+   event insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, S_hk, S_nonce, C_sk);
+   insert C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, S_hk, S_nonce, C_sk).
 
 (* Switch Sessions from a channel to another *)
 
@@ -648,41 +638,42 @@ let Switch_Channel (usr: login, U_tk: utoken, U_pwd: psswrd, U_sk: skey, U_cert:
    if allowed_session(check) then
    let chan(C_cert,S_cert: certificate, mode: chmode, O_ch: chid, O_keys: chkeys) = O_SC in
    if C_pk = get_pk(C_cert) && S_pk = get_pk(S_cert) then
-   new RqID[id, usr, U_tk]: nonce;   (* to prevent Proverif from looping *)
+   new RqID[id, usr, U_tk]: nonce;
    out(c, RqID);
-   (* An activation requests that changes the channel but not the user. *)
+   (* An activation request that changes the channel but not the user. *)
    get C_channels(=C_cert, =S_cert, =mode, ch: chid, symkeys: chkeys) suchthat ch <> O_ch in
    let SC = chan(C_cert, S_cert, mode, ch, symkeys) in
    let crypto = get_crypto(S_cert) in
    if allowed_crypto(crypto) then
-   (* Client provides an application certificate and a signature only when check = SSec *)
+   (* Client provides a signature only when check = SSec *)
    let signature = if check = SSec then asign( (S_cert, O_nonce), C_sk) else void in
    if (U_tk = user_anon && usr = anonymous) || (U_tk <> user_anon && usr <> anonymous) then
    let credential = (* password *)
       if U_tk <> user_pwd then void else
-      if (mode = Encrypt) then (O_nonce, U_pwd) else (
+      if (mode = Encrypt) || (mode = None && check = SNone) then (O_nonce, U_pwd) else
+      if (mode = Sign)    || (mode = None && (check = SNoAA || check = SSec)) then (
       if crypto = RSA then (
          new U_pek[C_pk]: sekey;
-         new U_pmk[C_pk]: sskey;
-         (ssign( (aenc( (U_pek, U_pmk), S_pk), O_nonce, senc(encode(U_pwd), U_pek)), U_pmk))
+         new U_psk[C_pk]: sskey;
+         (ssign( (h(S_pk), aenc( (U_pek, U_psk), S_pk), senc((O_nonce, U_pwd), U_pek)), U_psk))
       ) else
       if crypto = ECC then (
          new es_s[C_pk]: exponent;
          event secret_exp(es_s);
          let U_hk = exp(g, es_s) in
          let sh_k = exp(O_hk, es_s) in
-         let U_pek =  enc_key_pwd_ECC(sh_k, C_pk, S_pk) in
-         let U_psk = sign_key_pwd_ECC(sh_k, C_pk, S_pk) in
-         (ssign( (U_hk, O_hk, O_nonce, senc(encode(U_pwd), U_pek)), U_psk)))
+         let U_pek = enc_key_ECC(U_hk, O_hk, sh_k) in
+         (asign( (C_cert, U_hk, O_hk, senc((O_nonce, U_pwd), U_pek)), C_sk)))
    ) in
    let ActivateRequest = (* Activate request.*)
       if U_tk = user_anon then ActivateReq(SAtoken, signature, user_anon, anonymous, void) else
-      if U_tk = user_pwd  then event used(U_pwd, crypto, mode, check);
+      if U_tk = user_pwd  then event used(C_pk, usr, U_pwd, crypto, mode, check, credential);
                                ActivateReq(SAtoken, signature, user_pwd,  usr, credential) else
       if U_tk = user_cert then ActivateReq(SAtoken, signature, user_cert, usr,
          (*{ if KCI }*) (U_cert, asign( (S_cert, O_nonce),       U_sk))
          (*{  else  }*) (U_cert, asign( (S_cert, O_nonce, C_pk), U_sk)) (*{endif}*)) in
    let C_sess = sess(C_pk, S_pk, chan(C_cert, S_cert, mode, ch, symkeys), mode, check, id, SAtoken) in
+   event C_switched(SAtoken, SC);
    event C_Activation_Req(C_pk, S_pk, mode, check, C_sess, usr, U_tk);
    out(c, CH_send(true, C_cert, S_cert, mode, ch, symkeys, RqID, ActivateRequest));
 
@@ -729,7 +720,8 @@ letfun Notify_Activate_Reply(C_cert,S_cert: certificate, mode: chmode, O_ch,ch: 
                              check: smode, id: seid, SAtoken: stoken, O_usr,usr: login, O_tk,U_tk: utoken) =
    let C_pk = get_pk(C_cert) in
    let S_pk = get_pk(S_cert) in
-   let sn = sess(C_pk, S_pk, chan(C_cert, S_cert, mode, ch, symkeys), mode, check, id, SAtoken) in
+   let SC = chan(C_cert, S_cert, mode, ch, symkeys) in
+   let sn = sess(C_pk, S_pk, SC, mode, check, id, SAtoken) in
    if O_tk = user_none then (
         (* first activation *)
         new stamp[C_pk, S_pk]: nonce;
@@ -738,10 +730,10 @@ letfun Notify_Activate_Reply(C_cert,S_cert: certificate, mode: chmode, O_ch,ch: 
    ) else if usr <> O_usr then (
         (* reactivation by a new user on the same channel *)
         if ch = O_ch then
-        event S_Reactivation(sn, O_usr, usr)[C_pk, S_pk];
         event S_Activation(C_pk, S_pk, mode, check, sn, usr, U_tk)[];()
    ) else if ch <> O_ch then
         (* switching channel for the same user *)
+        event S_switched(SAtoken, SC);
         event S_Switching(sn, O_ch, ch)[C_pk, S_pk];
         event S_Activation(C_pk, S_pk, mode, check, sn, usr, U_tk)[];()
    else (* O_tk <> user_none && usr = O_usr && SC = O_SC :    *)
@@ -756,7 +748,10 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
 
    (  (* OPN request and response *)
    (* Receive OPN request *)
-   in(c, CHreq: bitstring)(*{ if queries["Sanity"] or ( ( not fixed ) and ("3.1" in queries["list"]) or ("3.1.0" in queries["list"]) or "3.2" in queries["list"] ) }*)[precise](*{ endif }*);
+   in(c, CHreq: bitstring)
+   (*{ if queries["Sanity"] or 
+      ((not fixed) and ("3.1" in queries["list"]))
+      or "3.1.KCI_UI" in queries["list"] or "3.1.reopen" in queries["list"] or "3.2" in queries["list"] }*)[precise](*{ endif }*);
    let CH(OPN_header(ch: chid, =crypto, C_cert: certificate, print: thumbprint), payload: CH_payload) = CHreq in
    let is_reopen = ch <> NewCh in
    if not(is_reopen) || (reopening_allowed() && mode <> None) then
@@ -770,16 +765,21 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
    let OPN_req(reqId: nonce, =mode, C_nonce_or_hk: nonce) = opn_req in
 
    (* Compute OPN response *)
-   (*{if "3.1.axioms.XX1" in queries["list"] }*)  (* Could reintroduce the specialized nonce context for 3.1.axioms.1 here  *)
-   new Token  [C_pk, S_pk, C_nonce_or_hk, ch]: chtoken;
-   new S_Nonce[C_pk, S_pk, C_nonce_or_hk, ch]: nonce;
-   (*{else}*)
-   new Token  [C_pk, S_pk, C_nonce_or_hk]: chtoken;
-   new S_Nonce[C_pk, S_pk]: nonce;
-   (*{endif}*)
-   (*{if "3.1.axioms.XX1" in queries["list"] }*)
+   (*{if "3.1.confusion" in queries["list"] }*)
+   new Token   [C_pk, S_pk, C_nonce_or_hk, ch]: chtoken;
+   new S_Nonce [C_pk, S_pk, C_nonce_or_hk]: nonce;
+   new S_secret[C_pk, S_pk, C_nonce_or_hk]: exponent;
+   (*{elif "3.1.axioms" in queries["list"] }*) (* needed for reopen+lt_leaks *)
+   new Token   [C_pk, S_pk, C_nonce_or_hk, ch]: chtoken;
+   new S_Nonce [C_pk, S_pk, C_nonce_or_hk]: nonce;
+   new S_secret[C_pk, S_pk, C_nonce_or_hk]: exponent;
+   (*{ elif "3.2.axioms" in queries["list"] }*)
+   new Token   [C_pk, S_pk, C_nonce_or_hk, ch]: chtoken;
+   new S_Nonce [C_pk, S_pk, C_nonce_or_hk, ch]: nonce;
    new S_secret[C_pk, S_pk, C_nonce_or_hk, ch]: exponent;
    (*{else}*)
+   new Token   [C_pk, S_pk, C_nonce_or_hk]: chtoken;
+   new S_Nonce [C_pk, S_pk]: nonce;
    new S_secret[C_pk, S_pk]: exponent;
    (*{endif}*)
    event secret_nonce(S_pk, C_pk, S_Nonce, mode);
@@ -805,9 +805,10 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
         let S_sign_k = sign_key_ECC(S_hk, C_hk, S_sharedkey) in
         keys(Token, C_enc_k, C_sign_k, S_enc_k, S_sign_k)
    ) in
-   let SC_id = (if is_reopen then (get S_channels(=C_cert, =S_cert, =mode, =ch, O_keys: chkeys) in ch) else
-   (*{ if "lemma" in queries["list"] }*) (new ch_n[C_pk, C_nonce_or_hk, S_pk, mode]: chid; ch_n)
-   (*{ else }*)                          (new ch_n[C_pk, S_pk, mode]: chid; ch_n)
+   let (SC_id:chid, O_keys:chkeys) = (if is_reopen then (get S_channels(=C_cert, =S_cert, =mode, =ch, O_keys: chkeys) in (ch, O_keys)) else
+   (*{ if "3.1.axioms" in queries["list"] or "3.1.confusion" in queries["list"] }*)
+                (new ch_n[C_pk, C_nonce_or_hk, S_pk, mode]: chid; (ch_n, no_keys))
+   (*{ else }*) (new ch_n[C_pk, S_pk, mode]:                chid; (ch_n, no_keys))
    (*{ endif }*)) in
    insert S_channels(C_cert, S_cert, mode, SC_id, sym_keys);
    event S_Channel(chan(C_cert, S_cert, mode, SC_id, sym_keys));
@@ -819,20 +820,29 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
    let (scert: certificate, dst_print: thumbprint, token: chtoken) =
       if mode = None then (null_cert, no_print, no_token) else (S_cert, hcert, Token) in
    let OPNresp = CH(OPN_header(SC_id, crypto, scert, dst_print), OPN_resp(reqId, SC_id, token, snonce_or_hk)) in
-   ( out(c, CH_sign_enc(OPNresp, mode, crypto, S_sk, C_pk))
-   | (if allowed_leak(ch_leaks) then event leak_ch(S_pk, sym_keys); out(c, sym_keys))
-   |  if is_reopen then (
-       !(get S_sessions(=C_pk,=S_pk, sessid: seid, SAtoken: stoken, check2: smode,
-                     chan(=C_cert, =S_cert, =mode, =SC_id, O_keys: chkeys),
-                     O_usr: login, O_tk: utoken, O_er: exponent, O_nonce: nonce) in
-         insert S_sessions(C_pk,S_pk, sessid, SAtoken, check2,
-                     chan(C_cert, S_cert, mode, SC_id, sym_keys), (* key update *)
-                     O_usr, O_tk, O_er, O_nonce)))
-   ) ) 
+   ( (if allowed_leak(ch_leaks) then event leak_ch(S_pk, sym_keys); out(c, sym_keys))
+   | (if is_reopen then (
+       !(get S_sessions(=C_pk, =S_pk, sessid: seid, SAtoken: stoken, check2: smode,
+            chan(=C_cert, =S_cert, =mode, =SC_id, =O_keys),
+            O_usr: login, O_tk: utoken, O_er: exponent, O_nonce: nonce) in
+         event S_reopened(chan(C_cert, S_cert, mode, SC_id, sym_keys));
+         event insert_S_sessions(C_pk, S_pk, sessid, SAtoken, check2,
+            chan(C_cert, S_cert, mode, SC_id, sym_keys), (* key update *)
+            O_usr, O_tk, O_er, O_nonce);
+         insert S_sessions(C_pk, S_pk, sessid, SAtoken, check2,
+            chan(C_cert, S_cert, mode, SC_id, sym_keys), (* key update *)
+            O_usr, O_tk, O_er, O_nonce))
+        | (
+            event S_reopened(chan(C_cert, S_cert, mode, SC_id, sym_keys));
+            out(c, CH_sign_enc(OPNresp, mode, crypto, S_sk, C_pk))
+          )
+      ) else
+         out(c, CH_sign_enc(OPNresp, mode, crypto, S_sk, C_pk)))
+   ))
 
   |( (* B. Respond to requests for services *)
    new er[S_pk]: exponent;
-   in(c, raw: bitstring);
+   in(c, raw: bitstring) (*{ if "3.1.confusion" in queries["list"] }*)[precise](*{ endif }*);
    let (C_cert: certificate, =S_cert, =mode, ch: chid, symkeys: chkeys, RqID: nonce, req: bitstring) = S_rcv(S_cert, raw) in
    if get_kind(C_cert) = client then
    let SC = chan(C_cert, S_cert, mode, ch, symkeys) in
@@ -840,16 +850,6 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
 
    (* Create session *)
    let SessionReq(payload: bitstring) = req in (
-    (* The OPCUA specifications (4:§5.6.2.1 and 7:§5.3 table 11) tolerate no application authentication
-     * (check = SNone) in two cases :
-     * 1. if the channel is unsecure (but some server can still enforce application authentication)
-     * 2. if the server explicitly desactivates application authentication.
-     * If application authentication is checked then we need:
-     *  - to verify that the client application certificate is the same as the one used to open the channel.
-     *  - to sign the nonce and client certificate with the server private key (of its application certificate. *)
-      (* We need to limit the context of these fresh values to prevent Proverif from looping *)
-      (* No Application Authentication in SNone or SNoAA ...*)
-      (* ... and yet signing with S_sk when SNoAA*)
       let signature: bitstring =
                  (         if check = SNone then (void)
       (*{if oracle}*) else if check = SNoAA then (
@@ -862,17 +862,15 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
                         let (C_nonce: nonce, C_app_cert: certificate) = payload in
                         if (check = SNoAA || C_app_cert = C_cert) then
                         asign((C_app_cert, C_nonce), S_sk) ) in
-   (*{if "3.1.axioms.1" in queries["list"] }*)
-      new s[C_pk, S_pk, mode, check, payload]: nonce;
-   (*{else}*)
       new s[C_pk, S_pk, mode, check]: nonce;
-   (*{endif}*)
       let id = se_id(s) in
-      new SAtoken[id]: stoken;  (* SAtoken[id, ch] (anonymous, user_none) *)
+   (*{ if "3.1.conf" in queries["list"] and "lt_leaks" in config["leaks"] }*)
+                 new SAtoken[id, ch, symkeys]: stoken; (* ch is needed for mode = None (no_keys) *)
+   (*{ else }*)  new SAtoken[id]             : stoken; (*{ endif }*)
       let sn = sess(C_pk, S_pk, SC, mode, check, id, SAtoken) in
-      out(c, id);                    (* Session ID is public *)
-      (*{ if "3.1.axioms.XX1" in queries["list"] }*)
-      new S_nonce[id, ch, SC, id]: nonce;
+      out(c, id); (* Session ID is public *)
+      (*{ if "3.1.axioms" in queries["list"] }*)
+      new S_nonce[id, SC]: nonce;
       (*{ else }*)
       new S_nonce[id, ch]: nonce;
       (*{ endif }*)
@@ -897,7 +895,7 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
                      O_usr: login, O_tk: utoken, O_er: exponent, O_nonce: nonce)
       in
       (* Application Authentication <=> SSec *)
-      if (check = SNone || check= SNoAA) || verify( signature, (S_cert, O_nonce), C_pk) then
+      if (check = SNone || check = SNoAA) || verify( signature, (S_cert, O_nonce), C_pk) then
       let chan(=C_cert, =S_cert, =mode, O_ch: chid, O_keys: chkeys) = O_SC in
       (* first activation on the same channel, reactivation on a different channel only for the same user *)
       if ( (O_SC = SC ) (* no switch *)
@@ -905,11 +903,7 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
       (*{ if "3.1.axioms" in queries["list"] }*)
       new S_nonce[id, ch, usr, U_tk, SC, SAtoken]: nonce;  (* information required to find the previous activation *)
       (*{ else }*)
-         (*{ if "3.1.axioms.XX1" in queries["list"] }*)
-         new S_nonce[id, ch, usr, U_tk, SC, id, SAtoken]: nonce;  (* information required to find the previous activation *)
-         (*{ else }*)
-         new S_nonce[id, ch, usr, U_tk]: nonce;  (* information required to find the previous activation *)
-      (*{ endif }*)
+      new S_nonce[id, ch, usr, U_tk]: nonce;
       (*{ endif }*)
       event secret_exp(O_er);
       event secret_exp(er);
@@ -921,10 +915,10 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
       (* Anonymous *)
       if U_tk = user_anon && usr = anonymous then (
          event S_Activated_Session(SAtoken, user_anon);
-         event insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce);
-         insert S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce);
          let _ = Notify_Activate_Reply(C_cert, S_cert, mode, O_ch,ch, symkeys,
                                        check, id, SAtoken, O_usr,usr, O_tk,U_tk) in
+         event insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce);
+         insert S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce);
          out(c, CH_send(false, S_cert, C_cert, mode, ch, symkeys, RqID, ActivateResp(S_ek, S_nonce)))
       ) else
       if usr <> anonymous then
@@ -935,16 +929,15 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
          if (mode = Encrypt) || (mode = None && check = SNone)
          then credential = (O_nonce, U_pwd)
          else if crypto = RSA then (
-            let (U_keys: bitstring, =O_nonce, enc_pwd: bitstring) = sread(credential) in
-            let (U_pek: sekey, U_pmk: sskey) = adec(U_keys, S_sk) in
-               (scheck(credential, U_pmk) && sdec(enc_pwd, U_pek) = encode(U_pwd)))
+            let (=h(S_pk), U_keys: bitstring, enc_pwd: bitstring) = sread(credential) in
+            let (U_pek: sekey, U_psk: sskey) = adec(U_keys, S_sk) in
+               (scheck(credential, U_psk) && sdec(enc_pwd, U_pek) = (O_nonce, U_pwd)))
          else if crypto = ECC then (
             let O_hk = exp(g, O_er) in
-            let (U_hk: G, =O_hk, =O_nonce, enc_pwd: bitstring) = sread(credential) in
+            let (=C_cert, U_hk: G, =O_hk, enc_pwd: bitstring) = aread(credential) in
             let sh_k  = exp(U_hk, O_er) in
-            let U_pek =  enc_key_pwd_ECC( sh_k, C_pk, S_pk) in
-            let U_psk = sign_key_pwd_ECC( sh_k, C_pk, S_pk) in
-               (scheck(credential, U_psk) && sdec(enc_pwd, U_pek) = encode(U_pwd)))
+            let U_pek =  enc_key_ECC( U_hk, O_hk, sh_k) in
+               (acheck(credential, C_pk) && sdec(enc_pwd, U_pek) = (O_nonce, U_pwd)))
       ) then (
          event S_Activated_Session(SAtoken, user_pwd);
          let x = Notify_Activate_Reply(C_cert, S_cert, mode, O_ch,ch, symkeys,
@@ -989,7 +982,6 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
 (* Restriction to express freshness of request ID *)
 restriction src: pkey, rqid: nonce, i,j: nonce;
    event(Check_RqID(src, rqid, i)) && event(Check_RqID(src, rqid, j)) ==> i = j.
-
 
 (********** Security Properties ***************)
 (**********************************************)
@@ -1053,7 +1045,6 @@ query id: chid, t: stoken, n: nonce, m: nonce, usr: login, b: bitstring, pk:pkey
 
 (* ------- Confidentiality ------- *)
 
-(*{ if queries["Confidentiality"] }*)
 
 (* Conf[C]: Confidentiality of data sent by clients. *)
 (*{ if "Conf[C]" in queries["list"] }*)
@@ -1067,6 +1058,7 @@ query SecPo: cryptography, mode: chmode, SE: seid, R: nonce, ch: chid, ck: chkey
       attacker(R) ==> event(leaked(S_pk))@ts && (SecPo = RSA || ts < t).
 (*{ endif }*)
 
+
 (* Conf[S]: Confidentiality of data received by clients. *)
 (*{ if "Conf[S]" in queries["list"] }*)
 query SecPo: cryptography, mode: chmode, SE: seid, R: nonce, ch: chid, ck: chkeys,
@@ -1076,7 +1068,7 @@ query SecPo: cryptography, mode: chmode, SE: seid, R: nonce, ch: chid, ck: chkey
       attacker(R) ==> event(leaked(C_pk));
 (*{ endif }*)
    event(S_data(C_pk, S_pk, SecPo, Encrypt, SE, R))@t &&
-      attacker(R) ==>   event(leaked(C_pk))@tc && (SecPo = RSA || tc < t).
+      attacker(R) ==> event(leaked(C_pk))@tc && (SecPo = RSA || tc < t).
 (*{ endif }*)
 
 
@@ -1094,25 +1086,24 @@ query U: login, pwd: psswrd, U_sk: skey, C_pk,S_pk,U_pk: pkey, U_cert: certifica
        ||  event(C_Activation_Req(C_pk, S_pk, mode, check, SE, U, user_pwd)) && event(leaked(S_pk)).
 (*{ endif }*)
 
-(*{ endif }*)
-
-
 
 (* ------- Authentication/Integrity: Agreement properties ------- *)
 
-(*{ if queries["Authentication"] }*)
 
 (*** Agr[S->C] The server authenticates the user and the session on the client machine of a request (3.1) *)
 
-(* 3.1.race: This query finds the user race condition attack (Attack Section 5.2) (with or without --not-fixed) *)
-(*{ if "3.1.0" in queries["list"] or "Agr[S->C]" in queries["list"] }*)
+(* 3.1.race: This query finds the user race condition attack (section 5.1) (with or without --not-fixed) *)
+(*{ if "Agr[S->C]" in queries["list"] or "3.1.race" in queries["list"] }*)
 query C_pk,S_pk,C'_pk,S'_pk: pkey, C_cert,S_cert,C'_cert,S'_cert: certificate, mode,mode': chmode, ch,ch': chid, ck,ck': chkeys,
       check,check': smode, id,id': seid, SAtk,SAtk': stoken, U: login, U_pk: pkey, R: nonce;
    let SC = chan(C_cert, S_cert, mode, ch, ck) in
    let SE = sess(C_pk, S_pk, SC, mode, check, id, SAtk) in
    let SC' = chan(C'_cert, S'_cert, mode', ch', ck') in
    let SE' = sess(C'_pk, S'_pk, SC', mode', check', id', SAtk') in
-   inj-event(S_User_Request(C_pk, S_pk, mode, SE, U, U_pk, R)) && event(honest(C_pk)) && event(honest(U_pk)) (* The honest events are not strictly needed since certificates associated to C_pk and S_pk are necessarily checked against the PKI, hence they must have been honestly generated. Importantly, this does not prevent those clients and servers to be compromised! Indeed, the associated private keys can leak! *)
+   (* The honest events are not strictly needed since certificates associated to C_pk and S_pk are necessarily
+      checked against the PKI, hence they must have been honestly generated. Importantly, this does not prevent
+      those clients and servers to be compromised! Indeed, the associated private keys can leak! *)
+   inj-event(S_User_Request(C_pk, S_pk, mode, SE, U, U_pk, R)) && event(honest(C_pk)) && event(honest(U_pk))
    ==> inj-event(C_User_Request(C_pk, S_pk, mode, SE, U, U_pk, R))
     || event(leaked(C_pk)) &&
        (   U = anonymous
@@ -1128,55 +1119,95 @@ query C_pk,S_pk,C'_pk,S'_pk: pkey, C_cert,S_cert,C'_cert,S'_cert: certificate, m
  *   the request comes either from the current user, or a previous user of the same session that the
  *   server has already seen. *)
 
+(* 3.1: weakened agreement property Agr-[S->C] (without --not-fixed) *)
+(* Also used to find the ECC impersonation attack (section 5.2) with --not-fixed *)
 (*{ if "3.1" in queries["list"] }*)
-query rogue_server,src3,dst3,clt,clt3,srv,srv3: pkey, c_cert,c_cert3,s_cert,s_cert3: certificate, mode,mode2,mode3: chmode, ch1,ch2,ch3: chid,
-      ck1,ck2,ck3: chkeys, check,check2,check3: smode, id,id3: seid, SAtk,SAtk3: stoken, usr1,usr2: login, U_tk: utoken,
-      upk1,upk2: pkey, val: nonce, sn3: session,utk:utoken;
-(*{ if queries["Unconditioned"] }*)
-(* 3.1.KCI: to find KCI attack (with or without --not-fixed) *)
-   let SC1 = chan(c_cert, s_cert, mode, ch1, ck1) in
+query clt,clt3,srv,srv3,rogue_server: pkey, c_cert,s_cert: certificate, mode,mode3: chmode, ch: chid,
+      ck1,ck2: chkeys, check,check3: smode, id: seid, SAtk: stoken, usr1,usr2: login, U_tk,utk3: utoken,
+      upk1,upk2: pkey, val: nonce, sn3: session, crypto: cryptography;
+   let SC1 = chan(c_cert, s_cert, mode, ch, ck1) in
    let sn1 = sess(clt, srv, SC1, mode, check, id, SAtk) in
-   let SC2 = chan(c_cert, s_cert, mode, ch2, ck2) in
-   let sn2 = sess(clt, srv, SC2, mode, check, id, SAtk) in
-
-     event(S_User_Request(clt, srv, mode, sn1, usr1, upk1, val)) && event(honest(clt)) && event(honest(upk1))
-     ==> (     event(C_User_Request(clt, srv, mode, sn1, usr2, upk2, val))
-            && event(S_Activation(clt, srv, mode, check, sn2, usr2, U_tk)) )
-        || (event(leaked(clt)) || mode = None) &&
-          (   usr1 = anonymous
-           || event(leaked(upk1))
-           || ( event(C_Activation_Req(clt3, srv3, mode3, check3, sn3, usr1, user_pwd)) && event(leaked(srv3)) )
-          );
-(*{ endif }*)
-
-(* 3.1.ECC: to find the ECC impersonation attack (Attack Section 5.3) with --not-fixed *)
-(* Also: Agr-[S->C]: weakened agreement property Agr-[S->C] (without --not-fixed) *)
-   let SC1 = chan(c_cert, s_cert, mode, ch1, ck1) in
-   let sn1 = sess(clt, srv, SC1, mode, check, id, SAtk) in
-   let SC2 = chan(c_cert, s_cert, mode, ch2, ck2) in
+   let SC2 = chan(c_cert, s_cert, mode, ch, ck2) in
    let sn2 = sess(clt, srv, SC2, mode, check, id, SAtk) in
      inj-event(S_User_Request(clt, srv, mode, sn1, usr1, upk1, val)) && event(honest(clt)) && event(honest(upk1))
      ==> ( inj-event(C_User_Request(clt, srv, mode, sn1, usr2, upk2, val))
-            && event(S_Activation(clt, srv, mode, check, sn2, usr2, U_tk))
-         )
-        || (* Or the client AND the user were compromised/not secure *)
-               (* Client compromission/not secure *)
-          (event(leaked(clt)) || mode = None) 
-            && ((* User compromission/not secure *)
+            && event(S_Activation(clt, srv, mode, check, sn2, usr2, U_tk)) )
+        (* Or the client AND the user were compromised / not secure *)
+        || ( event(leaked(clt)) || mode = None )
+            &&((* User compromission/not secure *)
                  usr1 = anonymous
               || event(leaked(pk(sk_of(usr1))))
-              || event(leaked_server(rogue_server)) (* possibly bind rogue_server in a different C_Activation(usr) event *)
-              || event(C_Activation_Req(src3, dst3, mode3, check3, sn3, usr1, utk)) && (mode3 = None || mode3 = Sign) (* can provide any S_nonce and user will sign *)
-              )
-        || event(leaked(srv)). (* to eliminate KCI attack (residual risk) *)
+              || event(leaked_server(rogue_server))
+              (* mode3 = None || mode3 = Sign && event(leaked(srv3)) : can provide any S_nonce and user will sign *)
+              (* utk = user_pwd && event(leaked(srv3))               : weakness of passwords                      *)
+              (* utk = user_cert && srv3 = srv && event(leaked(srv)) : KCI user impersonation attack              *)
+              || event(C_Activation_Req(clt3, srv3, mode3, check3, sn3, usr1, utk3)) && mode3 = None (* can provide any S_nonce and user will sign *)
+               )
+        (* to thwart reopen + compromised client attack *)
+        || event(leaked(clt)) && mode = Sign && event(S_open_channel(ch, mode, crypto, true)).
 (*{ endif }*)
 
+(* 3.1.KCI_UI: to find KCI User Impersonation attack (section 5.3) (with or without --not-fixed) *)
+(*{ if "3.1.KCI_UI" in queries["list"] }*)
+query clt,clt3,srv,srv3: pkey, c_cert,s_cert: certificate, mode,mode3: chmode, ch: chid,
+      ck1,ck2: chkeys, check,check3: smode, id: seid, SAtk: stoken, usr1,usr2: login, U_tk: utoken,
+      upk1,upk2: pkey, val: nonce, sn3: session;
+   let SC1 = chan(c_cert, s_cert, mode, ch, ck1) in
+   let sn1 = sess(clt, srv, SC1, mode, check, id, SAtk) in
+   let SC2 = chan(c_cert, s_cert, mode, ch, ck2) in
+   let sn2 = sess(clt, srv, SC2, mode, check, id, SAtk) in
+     event(S_User_Request(clt, srv, mode, sn1, usr1, upk1, val)) && event(honest(clt)) && event(honest(upk1))
+     ==> (  event(C_User_Request(clt, srv, mode, sn1, usr2, upk2, val))
+            && event(S_Activation(clt, srv, mode, check, sn2, usr2, U_tk)) )
+        || (event(leaked(clt)) || mode = None) &&
+          (   usr1 = anonymous
+           || event(leaked(pk(sk_of(usr1))))
+           || event(C_Activation_Req(clt3, srv3, mode3, check3, sn3, usr1, user_pwd)) && event(leaked_server(srv3))
+          ).
+(*{ endif }*)
 
+(* 3.1.reopen to find the reopen attack (section 5.4) *)
+(*{ if "3.1.reopen" in queries["list"] }*)
+query clt,srv,rogue_server: pkey, c_cert,s_cert: certificate, mode: chmode, ch: chid,
+      ck1,ck2: chkeys, check: smode, id: seid, SAtk: stoken, usr1,usr2: login, U_tk: utoken,
+      upk1,upk2: pkey, val: nonce;
+   let SC1 = chan(c_cert, s_cert, mode, ch, ck1) in
+   let sn1 = sess(clt, srv, SC1, mode, check, id, SAtk) in
+   let SC2 = chan(c_cert, s_cert, mode, ch, ck2) in
+   let sn2 = sess(clt, srv, SC2, mode, check, id, SAtk) in
+   event(S_User_Request(clt, srv, mode, sn1, usr1, upk1, val)) && event(honest(clt)) && event(honest(upk1))
+     ==> ( event(C_User_Request(clt, srv, mode, sn1, usr2, upk2, val))
+            && event(S_Activation(clt, srv, mode, check, sn2, usr2, U_tk)))
+        (* Or the client AND the user were compromised/not secure *)
+        || (event(leaked(clt)) || mode = None)
+           && ((* User compromission/not secure *)
+                 usr1 = anonymous
+              || event(leaked(pk(sk_of(usr1))))
+              || event(leaked_server(rogue_server))
+              )
+        || event(leaked(srv)). (* to eliminate all KCI attacks *)
+(*{ endif }*)
+
+(* 3.1.confusion to find the KCI Session and User Confusion attack (section 5.5) *)
+(*{ if "3.1.confusion" in queries["list"] }*)
+query clt,srv: pkey, c_cert,s_cert: certificate, mode: chmode, ch: chid,
+      ck1,ck2: chkeys, check: smode, id: seid, SAtk: stoken, usr1,usr2: login, U_tk: utoken,
+      upk1,upk2: pkey, val: nonce;
+   let SC1 = chan(c_cert, s_cert, mode, ch, ck1) in
+   let sn1 = sess(clt, srv, SC1, mode, check, id, SAtk) in
+   let SC2 = chan(c_cert, s_cert, mode, ch, ck2) in
+   let sn2 = sess(clt, srv, SC2, mode, check, id, SAtk) in
+   event(S_User_Request(clt, srv, mode, sn1, usr1, upk1, val)) && event(honest(clt)) && event(honest(upk1))
+     ==> ( event(C_User_Request(clt, srv, mode, sn1, usr2, upk2, val))
+            && event(S_Activation(clt, srv, mode, check, sn2, usr2, U_tk)))
+      || (event(leaked(clt))). (* to eliminate KCI User Impersonation attack *)
+(*{ endif }*)
 
 
 (*** Agr[C->S] The client authenticates the user context and the session of a response from the server (3.2) *)
 
-(*{ if "3.2.0" in queries["list"] or "Agr[C->S]" in queries["list"] }*)
+(* 3.2.race: This query finds the user race condition attack (section 5.1) (with or without --not-fixed) *)
+(*{ if "Agr[C->S]" in queries["list"] or "3.2.race" in queries["list"] }*)
 query C_pk,S_pk: pkey, C_cert,S_cert: certificate, mode: chmode, ch: chid, ck: chkeys,
       check: smode, id: seid, SAtk: stoken, U: login, utk: utoken, U_pk: pkey, R: nonce;
    let SC = chan(C_cert, S_cert, mode, ch, ck) in
@@ -1186,42 +1217,32 @@ query C_pk,S_pk: pkey, C_cert,S_cert: certificate, mode: chmode, ch: chid, ck: c
     || event(leaked_server(S_pk)).
 (*{ endif }*)
 
+(* 3.2: weakened agreement property Agr-[C->S] (without --not-fixed) *)
 (*{ if "3.2" in queries["list"] }*)
 query clt,srv: pkey, c_cert,s_cert: certificate, mode: chmode, ch1, ch2: chid, ck1,ck2: chkeys, check: smode,
       id: seid, tk: stoken, usr1,usr2: login, upk1,upk2: pkey, utk: utoken, val: nonce;
 (*   Same as for Agr[S->C]: the wanted property is falsified due to residual risks.
+ *
  *   Indeed, there is a lack of commitment from the client on the new user handling a session after a re-activation,
  *   the server accepts directly the new user, without knowing if the client did receive its message informing
  *   that the reactivation succeeded. Normally, the client should wait for the server reply, and that reply should
  *   arrive thanks to the TCP connexion and the channel integrity and finally the client should switch to the new
  *   user context.
- *
  *   But, there is a potential race condition here if the client sends a request before receiving the answer to
  *   it's new user activation. In that case, when the reply arrives, it can't say if it was in the context of
- *   the old user or in the context of the new user. *)
-(*{ if queries["Unconditioned"] }*)
-   let SC = chan(c_cert, s_cert, mode, ch1, ck1) in
-   let sn = sess(clt, srv, SC, mode, check, id, tk) in
-   event(C_User_Response(clt, srv, mode, sn, usr1, upk1, val))
-   ==> event(S_User_Response(clt, srv, mode, sn, usr1, upk1, val)) || event(leaked(srv));
-(*{ endif }*)
-
-(* Also: Agr-[C->S]: weakened agreement property Agr-[S->C] (without --not-fixed) *)
-(*   Therefore, we must accept the following possibility, that can be seen as a weakness of the protocol:
+ *   the old user or in the context of the new user.
+ *   Therefore, we must accept the following possibility, that can be seen as a weakness of the protocol:
  *   the response comes either in the context of the previous user or in the context of the new user on the
  *   same client. *)
    let SC1 = chan(c_cert, s_cert, mode, ch1, ck1) in
    let sn1 = sess(clt, srv, SC1, mode, check, id, tk) in
-   let SC2 = chan(c_cert, s_cert, mode, ch2, ck2) in
+   let SC2 = chan(c_cert, s_cert, mode, ch1, ck2) in
    let sn2 = sess(clt, srv, SC2, mode, check, id, tk) in
    inj-event(C_User_Response(clt, srv, mode, sn1, usr1, upk1, val))
      ==> (inj-event(S_User_Response(clt, srv, mode, sn1, usr2, upk2, val))
            && event(S_Activation(clt, srv, mode, check, sn2, usr2, utk)) )
       || event(leaked(srv))
       || (mode = None).
-(*{ endif }*)
-
-
 (*{ endif }*)
 
 
@@ -1251,8 +1272,6 @@ not attacker(new es_s).
 
 (* Required to prove the lemmas in ECC (no need for RSA) *)
 noselect bg: G, x: exponent; attacker(exp( *bg, *x)).
-noselect sh_k: G, C_pk,S_pk: pkey; attacker( enc_key_pwd_ECC( *sh_k, *C_pk, *S_pk)).
-noselect sh_k: G, C_pk,S_pk: pkey; attacker(sign_key_pwd_ECC( *sh_k, *C_pk, *S_pk)).
 
 noselect x: kind, y: cryptography, pk: pkey; attacker(certify( *x, *y, *pk)).
 (*{ if not "3.1.E" in queries["list"] }*)
@@ -1271,8 +1290,7 @@ noselect x1,x2: certificate, x3: chmode, x4: chid, x5: chkeys; table(C_channels(
 
 noselect x1,x2:pkey, x3:seid, x4:stoken, x5:smode, x6:channel_, x7:login, x8:utoken, x9:exponent, x10:nonce;
 table(S_sessions( *x1,*x2,*x3,*x4,*x5,*x6,*x7,*x8,*x9,*x10))/9000
-(*{ if "3.1.C" in queries["list"] or "3.2" in queries["list"]}*) [ignoreAFewTimes] (*{ endif }*).
-
+(*{ if "3.1.C" in queries["list"] }*) [ignoreAFewTimes] (*{ endif }*).
 
 noselect x1,x2:pkey, x3:seid, x4:stoken, x5:smode, x6:channel_, x7:login, x8:utoken, x9:G, x10:nonce, x11:skey;
 table(C_sessions( *x1,*x2,*x3,*x4,*x5,*x6,*x7,*x8,*x9,*x10,*x11))/9000
@@ -1282,19 +1300,28 @@ table(C_sessions( *x1,*x2,*x3,*x4,*x5,*x6,*x7,*x8,*x9,*x10,*x11))/9000
 
 (* -- Lemmas -- *)
 
-(** Lemmas for Agr[S->C] (3.1) *)
-(* BELOW are the 5 lemmas we can prove with all no select and basic lemmas. They are enough to then prove the query Agr[S->C]/3.1 *)
+(** Lemmas for Agr-[S->C] (3.1) *)
+(* BELOW are the 5 lemmas we can prove with all no select and basic lemmas. They are enough to then prove the query Agr-[S->C] (3.1) *)
 
 (* [LEMMA A] Proved with all noSelect *)
 (* Property: insertions in table S_session follow an activation, except at session creation where user token is user_none. NEEDS [solveOnce]*)
 (*{ if fixed and ("3.1.A" in queries["list"] or "3.1" in queries["list"] or "3.2" in queries["list"]) }*)
 (*{ if "3.1.A" in queries["list"] }*) query (*{ else }*) axiom (*{ endif }*)
-C_pk,S_pk: pkey, id: seid, SAtoken: stoken, mode: chmode, check: smode, c_cert,s_cert: certificate, ch: chid, ck:chkeys,
-usr: login, utk: utoken, er: exponent, S_nonce: nonce;
-   let SC  = chan(c_cert, s_cert, mode, ch, ck) in
-   event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, utk, er, S_nonce))
-   ==> event(S_Activation(C_pk, S_pk, mode, check, sess(C_pk, S_pk, SC, mode, check, id, SAtoken), usr, utk))
-   || utk = user_none
+C_pk,S_pk: pkey, C_sk: skey, id: seid, SAtoken: stoken, mode: chmode, check: smode, c_cert,s_cert: certificate, ch: chid, ck1,ck2: chkeys,
+usr: login, utk: utoken, er: exponent, ger: G, S_nonce: nonce, crypto: cryptography;
+   let SC1 = chan(c_cert, s_cert, mode, ch, ck1) in
+   let SC2 = chan(c_cert, s_cert, mode, ch, ck2) in
+   event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC1, usr, utk, er, S_nonce))
+   ==> event(S_Activation(C_pk, S_pk, mode, check, sess(C_pk, S_pk, SC1, mode, check, id, SAtoken), usr, utk))
+    || event(S_Activation(C_pk, S_pk, mode, check, sess(C_pk, S_pk, SC2, mode, check, id, SAtoken), usr, utk)) && event(S_reopened(SC1))
+    || utk = user_none;
+
+   let SC1 = chan(c_cert, s_cert, mode, ch, ck1) in
+   let SC2 = chan(c_cert, s_cert, mode, ch, ck2) in
+   event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC1, usr, utk, ger, S_nonce, C_sk))
+   ==> event(C_Activation(C_pk, S_pk, mode, check, sess(C_pk, S_pk, SC1, mode, check, id, SAtoken), usr, utk))
+    || event(C_Activation(C_pk, S_pk, mode, check, sess(C_pk, S_pk, SC2, mode, check, id, SAtoken), usr, utk)) && event(C_reopened(SC1))
+    || utk = user_none
     [induction].
 (*{ endif }*)
 
@@ -1302,38 +1329,91 @@ usr: login, utk: utoken, er: exponent, S_nonce: nonce;
 (* [LEMMA B] Proved with all noselect, and the lemma C) *)
 (* Property: a session at a client must match one at a server or a leak occurred. *)
 (* /!\ When used as an axiom to prove 3.1 we need [solveOnce] option on insert_X_sessions events *)
-(*{ if fixed and ("3.1.B" in queries["list"] or "3.1" in queries["list"] or "3.2" in queries["list"]) }*)
+(*{ if fixed and ("3.1.B" in queries["list"] or "3.1" in queries["list"]) }*)
 (*{ if "3.1.B" in queries["list"] }*) query (*{ else }*) axiom (*{ endif }*)
-C_pk,S_pk,C_pk2,S_pk2: pkey, id,id2: seid, check: smode, usr,usr2: login, U_tk,U_tk2: utoken, er,er2: exponent, ger: G, S_nonce,S_nonce2: nonce, C_sk:skey,
-      SAtoken,SAtoken2: stoken, c_cert,s_cert,c_cert2,s_cert2: certificate, mode: chmode, ch: chid, ck: chkeys;
+C_pk,S_pk,C_pk2,S_pk2: pkey, id: seid, check: smode, usr1,usr2: login, U_tk1,U_tk2: utoken, er,er2: exponent, ger: G, S_nonce1,S_nonce2: nonce, C_sk:skey,
+SAtoken: stoken, c_cert,s_cert: certificate, mode: chmode, ch: chid, ck1,ck2: chkeys, crypto: cryptography;
 
-   let SC  = chan(c_cert,  s_cert,  mode, ch, ck) in
-   let SC2 = chan(c_cert2, s_cert2, mode, ch, ck) in
-
-           table(C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk))
-==> event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk,  er, S_nonce))
-    || event(leaked_server(S_pk))
+(** New kind of lemmas capturing MiM:
+  if client and server have both logged a matching channel, then the adversary cannot learn the channel keys and tamper with the messages
+  except if both client and server are compromised *)
+let SC  = chan(c_cert, s_cert, mode, ch, ck1) in
+let SC' = chan(c_cert, s_cert, mode, ch, ck2) in
+   event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr1, U_tk1, ger, S_nonce1, C_sk))
+&& event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr2, U_tk2, er2, S_nonce2))
+   ==> event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr1, U_tk1, er, S_nonce1))
+(*{ if config["reopen"] }*)
+    || event(C_reopened(SC)) && event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC', usr1, U_tk1, er, S_nonce1))
+(*{ endif }*)
+    || event(leaked_server(S_pk)) && event(leaked(C_pk))
     || mode = None
-    [induction].
+    || U_tk1 = user_none;
+
+let SC  = chan(c_cert, s_cert, mode, ch, ck1) in
+let SC' = chan(c_cert, s_cert, mode, ch, ck2) in
+    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC,  usr1, U_tk1, ger, S_nonce1, C_sk))
+==> event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr1, U_tk1,  er, S_nonce1))
+(*{ if config["reopen"] }*)
+ || event(S_reopened(SC)) && event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC', usr1, U_tk1,  er, S_nonce1))
+(*{ endif }*)
+ || event(leaked_server(S_pk))
+ || mode = None [induction].
 (*{ endif }*)
 
 
 (* [LEMMA C] needed for the proof of lemma B. Those relate the new insert_events to tables.
  * Property: insertions in tables are always done with an insert event. True by construction.
  * They can be proved using noslect on the corresponding table with the [ignoreAFewTimes] flag.*)
-(*{ if fixed and ("3.1.E" in queries["list"] or "3.1.C" in queries["list"] or "3.1.B" in queries["list"] or "3.1" in queries["list"] or "3.2" in queries["list"]) }*)
+(*{ if fixed and ("3.1.E" in queries["list"] or "3.1.C" in queries["list"] or "3.1.B" in queries["list"] or "3.1.A" in queries["list"]
+                 or "3.1" in queries["list"] or "3.2" in queries["list"] ) }*)
 (*{ if "3.1.C" in queries["list"] }*)
 noselect x:bitstring; attacker( *x ). query
 (*{ else }*) axiom (*{ endif }*)
-C_pk,S_pk: pkey, id: seid, SAtoken: stoken, check: smode, SC: channel_, usr: login, U_tk: utoken, er: exponent, ger:G, S_nonce: nonce, C_sk: skey;
-          table(S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk,  er, S_nonce))
-==>event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk,  er, S_nonce));
-          table(C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk))
-==>event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)).
+c_cert,s_cert: certificate, mode: chmode, ch,ch1,ch2: chid, ck,ck1,ck2: chkeys, crypto: cryptography,
+C_pk,S_pk: pkey, id: seid, SAtoken: stoken, check: smode, SC: channel_, sn: session, usr: login, U_tk: utoken,
+er,er2: exponent, ger,ger2:G, S_nonce,S_nonce2: nonce, C_sk: skey;
+           table(S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk,  er, S_nonce))
+==> event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk,  er, S_nonce));
+
+           table(C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk))
+==> event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk));
+
+ let SC1 = chan(certify(client, crypto, C_pk), certify(server, crypto, S_pk), mode, ch, ck) in
+    event(S_reopened(SC1))
+==> event(S_open_channel(ch, mode, crypto, true));
+
+ let SC1 = chan(certify(client, crypto, C_pk), certify(server, crypto, S_pk), mode, ch, ck) in
+    event(C_reopened(SC1))
+==> event(C_open_channel(ch, mode, crypto, true));
+
+(*{ if not(config["switch"]) }*)
+(* [Sessions] a session must have been created to be activated by a client *)
+let SC1 = chan(c_cert, s_cert, mode, ch, ck1) in
+let SC2 = chan(c_cert, s_cert, mode, ch, ck2) in
+ (* let SC3 = chan(c_cert, s_cert, mode, ch2, ck2) in *)
+let sn1 = sess(C_pk, S_pk, SC1, mode, check, id, SAtoken) in
+    event(C_Activation_Req(C_pk, S_pk, mode, check, sn1, usr, U_tk))
+==> event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC2, anonymous, user_none, ger, S_nonce, C_sk))
+    && ( ck2 = ck1 || event(C_reopened(SC1)) )
+(* || event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC3, anonymous, user_none, ger, S_nonce, C_sk))
+    && event(C_Switching(SC3, sn4, user_none)) *)
+;
 (*{ endif }*)
 
+(* [Sessions] Client always do an activation request before (re)inserting a session for a new user *)
+event(C_Activation(C_pk, S_pk, mode, check, sn, usr, U_tk))
+   ==> event(C_Activation_Req(C_pk, S_pk, mode, check, sn, usr, U_tk));
+
+   let SC1 = chan(c_cert, s_cert, mode, ch, ck1) in
+   event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC1, usr, U_tk, ger, S_nonce, C_sk))
+   ==> event(C_Activation(C_pk, S_pk, mode, check, sess(C_pk, S_pk, SC1, mode, check, id, SAtoken), usr, U_tk))
+    || event(C_reopened(SC1))
+    || U_tk = user_none.
+(*{ endif }*)
+
+
 (* [LEMMA D] only for RSA. *)
-(*{ if fixed and ("3.1.D" in queries["list"] or "3.1" in queries["list"] or "3.2" in queries["list"]) }*)
+(*{ if fixed and ("3.1.D" in queries["list"] or "3.1" in queries["list"] ) }*)
 (*{ if "3.1.D" in queries["list"] }*)
 query (*{ else }*) axiom (*{ endif }*) src,dst: pkey, n: nonce, mode: chmode;
    event(honest(src)) && event(honest(dst)) &&
@@ -1341,29 +1421,31 @@ query (*{ else }*) axiom (*{ endif }*) src,dst: pkey, n: nonce, mode: chmode;
 (*{ endif }*)
 
 
+(* [LEMMA E] *)
 (*{ if fixed and ("3.1.E" in queries["list"] or "3.1" in queries["list"]) }*)
 (*{ if not "3.1.E" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
-      chtk1,chtk2: chtoken, 
-      C_enc_k1,C_enc_k2,S_enc_k1,S_enc_k2: sekey, C_sign_k1, C_sign_k2, C_sign_k,S_sign_k, S_sign_k1,S_sign_k2: sskey,
-      c_cert1,c_cert2,s_cert1,s_cert2: certificate, mode1,mode2: chmode, ch1,ch2: chid,
-      upk1,C_pk1,C_pk2,S_pk1,S_pk2,srv: pkey, id1,id2: seid, SAtoken, SAtoken1, SAtoken2: stoken, check1,check2: smode, usr1,usr2: login, U_tk1,U_tk2: utoken,
-      er,er2: exponent, ger,ger2: G, S_nonce,S_nonce1,S_nonce2,S_nonce3: nonce, C_sk1,C_sk2:skey, SC: channel_,sn,sn2:session,val:nonce, ki:kind, crypto:cryptography, stamp:nonce,
-      src2,dst2,src,dst,rogue_server: pkey, mode: chmode, check: smode, usr: login, utk: utoken
-      ;
+src,src2,dst,dst2,rogue_server: pkey, C_pk: skey, crypto: cryptography, mode,mode2: chmode, ch1,ch2: chid, SK1,SK2: chkeys,
+id,id2: seid, SAtk: stoken, check,check2: smode, usr: login, utk: utoken, sn2: session;
+let SC1 = chan(certify(client, crypto, src), certify(server, crypto, dst), mode, ch1, SK1) in
+let SC2 = chan(certify(client, crypto, src), certify(server, crypto, dst), mode, ch2, SK2) in
+let sn  = sess(src, dst, SC1, mode, check, id, SAtk) in
+let sn' = sess(src, dst, SC2, mode, check, id, SAtk) in
+let sn3 = sess(src, dst, SC2, mode, check, id2, SAtk) in
 
-   event(S_Activation(src, dst, mode, check, sn, usr, utk))
-       ==>  event(C_Activation_Req(src, dst, mode, check, sn, usr, utk))
-         ||  (* Pair client/user were compromised or not secured *)
-            (* Client compromission/not secure *)
-            (event(leaked(src)) || mode = None) 
-            && ((* User compromission/not secure *)
+event(S_Activation(src, dst, mode, check, sn, usr, utk))
+   ==> event(C_Activation_Req(src, dst, mode, check, sn, usr, utk))
+       || (* Pair (client, user) compromised or not secured *)
+          (* Client compromised / not secure *)
+          (event(leaked(src)) || mode = None)
+          && ((* User compromised / not secure *)
                  usr = anonymous
               || event(leaked(pk(sk_of(usr))))
-              || event(leaked_server(rogue_server)) (* possibly bind rogue_server in a different C_Activation(usr) event *)
-              || event(C_Activation_Req(src2, dst2, mode2, check2, sn2, usr, utk)) && (mode2 = None || mode2 = Sign) (* can provide any S_nonce and user will sign *)
-              )
- [induction].
+              || event(leaked_server(rogue_server))
+              || event(C_Activation_Req(src2, dst2, mode2, check2, sn2, usr, utk)) && mode2 = None (* can provide any S_nonce and user will sign *)
+               )
+[induction].
 (*{ endif }*)
+
 
 
 (** Lemmas for Agr[C->S] (3.2) *)
@@ -1387,33 +1469,33 @@ query (*{ else }*) axiom (*{ endif }*) src,dst: pkey, n: nonce, mode: chmode;
 ==> C_enc_k1 = C_enc_k2 && S_enc_k1 = S_enc_k2 && S_sign_k1 = S_sign_k2 
     (* && chtk1 = chtk2 
     && ch1 = ch2 *) (* previous two lines not required to prove 3.2 *)
-    && C_pk1 = C_pk2 && S_pk1 = S_pk2
-.
+    && C_pk1 = C_pk2 && S_pk1 = S_pk2.
 (*{ endif }*)
 
 
 (******* BASIC LEMMA *************)
 (* BELOW ARE THE LEMMAS that can all be proved without any noselect. Just turns axioms into queries. *)
 
+(* 3.1.axioms.1 *)
+
 (*{ if "3.1.axioms.1" in queries["list"] }*)
 (* This restriction expresses the freshness of C_nonce with respect to S_nonce *)
-restriction C_n1:bitstring, S_n1,S_n2:nonce;
-   event(fresh_C_nonce(C_n1,S_n1))
-&& event(fresh_C_nonce(C_n1,S_n2))
+restriction C_n1: bitstring, S_n1,S_n2: nonce;
+   event(fresh_C_nonce(C_n1, S_n1))
+&& event(fresh_C_nonce(C_n1, S_n2))
  ==> S_n1 = S_n2.
 (*{ endif }*)
 
 
 (*{ if fixed and
-   ("3.1.axioms.1" in queries["list"] or "3.1" in queries["list"] or "3.1.A" in queries["list"] or "3.1.B" in queries["list"] or "3.1.C" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"] or "3.2" in queries["list"]) }*)
+   ("3.1.axioms.1" in queries["list"] or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.E" in queries["list"]) }*)
 (* Matching client's symmetric signature key + SAtoken => matching channel+session *)
 
 (*{ if not "3.1.axioms.1" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
-      chtk1,chtk2: chtoken, 
-      C_enc_k1,C_enc_k2,S_enc_k1,S_enc_k2: sekey, C_sign_k1, C_sign_k2, C_sign_k,S_sign_k, S_sign_k1,S_sign_k2: sskey,
-      c_cert1,c_cert2,s_cert1,s_cert2: certificate, mode1,mode2: chmode, ch1,ch2: chid,
-      rogue_server,upk1,C_pk1,C_pk2,S_pk1,S_pk2,srv: pkey, id1,id2: seid, SAtoken, SAtoken1, SAtoken2: stoken, check1,check2: smode, usr1,usr2: login, U_tk1,U_tk2: utoken,
-      exp,er,er2: exponent, ger,ger2: G, S_nonce,S_nonce1,S_nonce2,S_nonce3: nonce, C_sk1,C_sk2:skey, SC: channel_,sn:session,val:nonce, ki:kind, crypto,crypto1,crypto2,crypto3,crypto4:cryptography, stamp:nonce,SK1_, SK2_:chkeys;
+chtk1,chtk2: chtoken, C_enc_k1,C_enc_k2,S_enc_k1,S_enc_k2: sekey, C_sign_k1, C_sign_k2, C_sign_k,S_sign_k, S_sign_k1,S_sign_k2: sskey,
+c_cert1,c_cert2,s_cert1,s_cert2: certificate, mode1,mode2: chmode, ch1,ch2: chid,
+C_pk1,C_pk2,S_pk1,S_pk2: pkey, C_sk2: skey, id1,id2: seid, SAtoken: stoken, check1,check2: smode, usr1,usr2: login, U_tk1,U_tk2: utoken,
+er: exponent, ger: G, S_nonce1,S_nonce2: nonce;
 
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k, S_enc_k1, S_sign_k1) in
     let SK2 = keys(chtk2, C_enc_k2, C_sign_k, S_enc_k2, S_sign_k2) in
@@ -1422,43 +1504,75 @@ restriction C_n1:bitstring, S_n1,S_n2:nonce;
  
     event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken, check1, SC1, usr1, U_tk1,  er, S_nonce1))
  && event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
- ==> C_pk1 = C_pk2  && S_pk1 = S_pk2 
-   && (check1 = check2 )
-   && SC1 = SC2
-   && (id1 = id2 ) 
+ ==> (C_pk1 = C_pk2)  && (S_pk1 = S_pk2) && (SC1 = SC2)
+     && ((id1 = id2 && check1 = check2) || event(leaked_server(S_pk2))) (* needed for reopen or switch when lt_leaks *)
+     (* not true if SNoAa|SSec, i.e. server in SNoAA and client in SSec or vice versa *)
    ||    event(leaked(C_pk1))
-      && event(leaked_server(srv))
-   .
+      && event(leaked_server(S_pk2)).
+(*{ endif }*)
+
+(* 3.1.conf *)
+(*{ if fixed and ("3.1.conf" in queries["list"]
+  or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.E" in queries["list"] ) }*)
+(*{ if not "3.1.conf" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
+C_cert,S_cert: certificate, C_pk,S_pk: pkey, ch,ch1,ch2: chid, mode: chmode, SKs,SK1,SK2: chkeys, id: seid, SAtoken: stoken,
+check: smode, usr: login, U_tk: utoken, er: exponent, ger: G, S_nonce: nonce, C_sk: skey;
+
+let SC = chan(C_cert, S_cert, mode, ch, SKs) in
+table(C_sessions(C_pk, S_pk, id, SAtoken, check, SC, anonymous, user_none, ger, S_nonce, C_sk)) && attacker(SAtoken)
+==> event(leaked_server(S_pk)) || mode = None || mode = Sign;
+
+let SC1 = chan(C_cert, S_cert, mode, ch1, SK1) in
+let SC2 = chan(C_cert, S_cert, mode, ch2, SK2) in
+table(S_sessions(C_pk, S_pk, id, SAtoken, check, SC1, anonymous, user_none, er, S_nonce)) && attacker(SAtoken)
+==> event(leaked(C_pk)) || mode = None || mode = Sign
+(*{ if "lt_leaks" in config["leaks"] and config["reopen"] }*)
+ || event(leaked_server(S_pk)) && event(C_reopened(SC2)) && ch1 = ch2 (*{ endif }*)
+(*{ if "lt_leaks" in config["leaks"] and config["switch"] }*)
+ || event(leaked_server(S_pk)) && event(C_switched(SAtoken, SC2)) (*{ endif }*)
+[induction].
+
+(*{ if "lt_leaks" in config["leaks"] }*)
+(*{ if not "3.1.conf" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
+c_cert,s_cert: certificate, C_pk,S_pk: pkey, ch1,ch2: chid, mode1,mode2: chmode, SK1,SK2: chkeys,
+id1,id2: seid, SAtoken: stoken, check1,check2: smode, er1,er2: exponent, S_nonce1,S_nonce2: nonce;
+(* SAtoken is unique for each creation of a session on the server *)
+let SC1 = chan(c_cert, s_cert, mode1, ch1, SK1) in
+let SC2 = chan(c_cert, s_cert, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk, S_pk, id1, SAtoken, check1, SC1, anonymous, user_none, er1, S_nonce1))
+&& event(insert_S_sessions(C_pk, S_pk, id2, SAtoken, check2, SC2, anonymous, user_none, er2, S_nonce2))
+==> id1 = id2 && mode1 = mode2 && check1 = check2 && er1 = er2 && S_nonce1 = S_nonce2.
+(*{ endif }*)
+
 (*{ endif }*)
 
 
-(*{ if fixed and
-   ("3.1.axioms" in queries["list"] or "3.1" in queries["list"] or "3.1.A" in queries["list"] or "3.1.B" in queries["list"] or "3.1.C" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"] or "3.2" in queries["list"]) }*)
-
+(* 3.1.axioms *)
+(*{ if fixed and ("3.1.axioms" in queries["list"]
+  or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]) }*)
 (*{ if not "3.1.axioms" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
 srv:pkey; event(leaked_server(srv)) ==> event(leaked(srv)).
 
 (*{ if not "3.1.axioms" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
-      chtk1,chtk2: chtoken, 
-      C_enc_k1,C_enc_k2,S_enc_k1,S_enc_k2: sekey, C_sign_k1, C_sign_k2, C_sign_k,S_sign_k, S_sign_k1,S_sign_k2: sskey,
-      c_cert1,c_cert2,s_cert1,s_cert2: certificate, mode1,mode2: chmode, ch1,ch2: chid,
-      rogue_server,upk1,C_pk1,C_pk2,S_pk1,S_pk2,srv: pkey, id1,id2: seid, SAtoken, SAtoken1, SAtoken2: stoken, check1,check2: smode, usr1,usr2: login, U_tk1,U_tk2: utoken,
-      exp,er,er2: exponent, ger,ger2: G, S_nonce,S_nonce1,S_nonce2,S_nonce3: nonce, C_sk1,C_sk2:skey, SC: channel_,sn:session,val:nonce, ki:kind, crypto,crypto1,crypto2,crypto3,crypto4:cryptography, stamp:nonce,SK1_, SK2_:chkeys;
+chtk,chtk1,chtk2: chtoken,
+C_enc_k,C_enc_k1,C_enc_k2,S_enc_k1,S_enc_k2: sekey, C_sign_k1, C_sign_k2, C_sign_k,S_sign_k, S_sign_k1,S_sign_k2: sskey,
+c_cert,s_cert,c_cert1,c_cert2,s_cert1,s_cert2: certificate, mode,mode1,mode2: chmode, ch,ch1,ch2: chid,
+rogue_server,upk1,C_pk,S_pk,C_pk1,C_pk2,S_pk1,S_pk2,srv: pkey, id,id1,id2: seid, SAtoken, SAtoken1, SAtoken2: stoken, check,check1,check2: smode, usr,usr1,usr2: login, utk,U_tk1,U_tk2: utoken,
+er,er2: exponent, ger,ger2: G, S_nonce,S_nonce1,S_nonce2,S_nonce3: nonce, C_sk1,C_sk2,S_sk: skey, SC: channel_, sn: session, val: nonce, ki: kind,
+crypto,crypto1,crypto2,crypto3,crypto4: cryptography, stamp: nonce, ck,ck',SK1_,SK2_:chkeys;
 
-    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1_) in
-    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2_) in
- 
-    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
- && event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce1, C_sk2))
- ==> C_pk1 = C_pk2  && S_pk1 = S_pk2
- && SC1 = SC2
- && id1 = id2 && check1 = check2
- &&  SAtoken1 = SAtoken2
-   || event(leaked_server(rogue_server))
-   || usr1 = anonymous
-   ;
+(*{ if not(config["reopen"]) }*)
+   event(S_open_channel(ch1, mode1, crypto, true)) ==> false;
+   event(C_open_channel(ch1, mode1, crypto, true)) ==> false;
+   event(S_reopened(SC)) ==> false;
+   event(C_reopened(SC)) ==> false;
+(*{ endif }*)
 
-
+(*{ if not("lt_leaks" in  config["leaks"]) }*)
+   event(leaked(C_pk)) ==> false;
+   event(leaked_server(S_pk)) ==> false;
+(*{ endif }*)
 
    (* Matching keys in channels ==> same channel *)
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
@@ -1493,38 +1607,27 @@ srv:pkey; event(leaked_server(srv)) ==> event(leaked(srv)).
     && mode1 = mode2 && ch1 = ch2 && SK1 = SK2        
 || event(leaked(C_pk1)) || event(leaked_server(S_pk2));
 
+(* With noselect, ProVerif assumes the contrary! *)
+attacker(sk_of(usr1)) && event(honest(pk(sk_of(usr1)))) ==> event(leaked(pk(sk_of(usr1))));
 
-    let SK1 = keys(chtk1, C_enc_k1, C_sign_k, S_enc_k1, S_sign_k1) in
-    let SK2 = keys(chtk2, C_enc_k2, C_sign_k, S_enc_k2, S_sign_k2) in
-    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
-    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+attacker(pwd_of(usr1)) && event(honest(pk(sk_of(usr1))))
+==> event(leaked(pk(sk_of(usr1))))
+ || event(C_Activation_Req(C_pk, S_pk, mode, check, sn, usr1, user_pwd)) && (event(leaked_server(S_pk)) || mode = None && check = SNone);
 
-    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
- && event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
-==> (C_pk1 = C_pk2 && S_pk1 = S_pk2 && c_cert1=c_cert2 && s_cert1=s_cert2 && mode1=mode2
-       && ch1=ch2  && SK1 = SK2)
-     ||  event(leaked(C_pk1)) &&
-               (
-                  ( event(leaked_server(srv)) )
-               );
+attacker(certify(server, crypto, pk(S_sk))) && attacker(S_sk) ==> event(leaked_server(pk(S_sk)));
+attacker(certify(client, crypto, pk(C_sk1))) && attacker(C_sk1) ==> event(leaked(pk(C_sk1)));
 
-   (* With noselect, ProVerif assume the contrary! *)
-   attacker(sk_of(usr1)) && event(honest(pk(sk_of(usr1)))) ==> event(leaked(pk(sk_of(usr1))));
-
-   attacker(pwd_of(usr1)) ==>
-   event(leaked(pk(sk_of(usr1))))
-   || event(leaked_server(rogue_server));
+event(leaked_server(rogue_server)) ==> event(leaked(rogue_server));
 
 (* No user key in client/server  *)
-    event(insert_S_sessions(pk(sk_of(usr1)), S_pk1, id1, SAtoken1, check1, SC, usr1, U_tk1,  er, S_nonce1))
+    event(insert_S_sessions(pk(sk_of(usr1)), S_pk1, id1, SAtoken1, check1, SC, usr2, U_tk1,  er, S_nonce1))
    ==> false;
-    event(insert_S_sessions(C_pk1, pk(sk_of(usr1)), id1, SAtoken1, check1, SC, usr1, U_tk1,  er, S_nonce1))
+    event(insert_S_sessions(C_pk1, pk(sk_of(usr1)), id1, SAtoken1, check1, SC, usr2, U_tk1,  er, S_nonce1))
    ==> false;
     event(insert_C_sessions(pk(sk_of(usr1)), S_pk2, id2, SAtoken2, check2, SC, usr2, U_tk2, ger, S_nonce2, C_sk2))
    ==> false;
     event(insert_C_sessions(C_pk1, pk(sk_of(usr1)), id2, SAtoken2, check2, SC, usr2, U_tk2, ger, S_nonce2, C_sk2))
    ==> false;
-
 
 (* Matching server's symmetric signature key => matching channel *)
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k) in
@@ -1538,8 +1641,7 @@ srv:pkey; event(leaked_server(srv)) ==> event(leaked(srv)).
        && ch1=ch2 *) && SK1 = SK2)
      ||  event(leaked(C_pk1));
 
-
-(* Matching server's symmetric signature key and session ID => matching SAtoken *)
+(* Matching server's symmetric signature key and session ID => matching SAtoken *) (* #7, needed by 3.2 *)
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k) in
     let SK2 = keys(chtk2, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k) in
     let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
@@ -1550,9 +1652,7 @@ srv:pkey; event(leaked_server(srv)) ==> event(leaked(srv)).
 ==> (SAtoken1 = SAtoken2)
     ||  event(leaked_server(S_pk1));
 
-
-(* necessary for proof in SNone mode *)
-(* true even with dishonest client/server *)
+(* Necessary for proof in SNone mode. true even with dishonest client/server *)
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k) in
     let SK2 = keys(chtk1, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k) in
     let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
@@ -1573,6 +1673,95 @@ srv:pkey; event(leaked_server(srv)) ==> event(leaked(srv)).
 ==> ( C_pk1 = C_pk2 && S_pk1 = S_pk2 && id1 = id2 && SAtoken1 = SAtoken2 && SC1 = SC2 )
    || ((event(leaked(C_pk1)) ||  event(leaked_server(S_pk1))) && 
       (event(leaked(C_pk2)) || event(leaked_server(S_pk2))));
+
+(* Same client signing keys => client and server are on the same channel *)
+    let SK1 = keys(chtk1, C_enc_k1, C_sign_k, S_enc_k1, S_sign_k1) in
+    let SK2 = keys(chtk1, C_enc_k2, C_sign_k, S_enc_k2, S_sign_k2) in
+    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
+ && event(insert_C_sessions(C_pk2, S_pk1, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+
+==> ( C_pk1 = C_pk2 && SC1 = SC2 ) || event(leaked_server(S_pk1));
+
+(* Same client signing keys && server leaked => othen client leaked also *)
+    let SK1 = keys(chtk1, C_enc_k1, C_sign_k, S_enc_k1, S_sign_k1) in
+    let SK2 = keys(chtk1, C_enc_k2, C_sign_k, S_enc_k2, S_sign_k2) in
+    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
+ && event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2)) && event(leaked_server(S_pk2))
+
+==> SC1 = SC2 || (SK1 = SK2 && event(leaked(C_pk1)));
+
+(* Same client encryption keys => client and server are on the same channel *)
+    let SK1 = keys(chtk1, C_enc_k, C_sign_k1, S_enc_k1, S_sign_k1) in
+    let SK2 = keys(chtk2, C_enc_k, C_sign_k2, S_enc_k2, S_sign_k2) in
+    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
+ && event(insert_C_sessions(C_pk2, S_pk1, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+
+==> ( SC1 = SC2 ) || event(leaked_server(S_pk1));
+
+(* Same channel token => client and server are on the same channel *)
+    let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+    let SK2 = keys(chtk, C_enc_k2, C_sign_k1, S_enc_k2, S_sign_k2) in
+    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
+ && event(insert_C_sessions(C_pk2, S_pk1, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+
+==> ( SC1 = SC2 ) || event(leaked_server(S_pk1));
+
+
+    let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+    let SK2 = keys(chtk, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k1) in
+    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
+ && event(insert_C_sessions(C_pk2, S_pk1, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+
+==> ( SC1 = SC2 ) || event(leaked_server(S_pk1));
+
+(* Same SNonce  *)
+    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1_) in
+    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2_) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce1, C_sk2))
+==> ch1 = ch2 && c_cert1 = c_cert2 && s_cert1 = s_cert2 && mode1 = mode2
+    && C_pk1 = C_pk2 && S_pk1 = S_pk2 && id1 = id2 && SAtoken1 = SAtoken2 && check1 = check2
+    && usr1 = usr2 && U_tk1 = U_tk2
+|| mode2 = None || event(leaked_server(S_pk2));
+
+(* Same channel and SA token ==> same session *)
+   let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+   let SC1 = chan(c_cert1, s_cert1, mode, ch1, SK1) in
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk1, S_pk1, id2, SAtoken, check2, SC1, usr2, U_tk2, ger, S_nonce2, C_sk2))
+==> (id1 = id2 && check1 = check2)
+|| event(leaked_server(S_pk1))
+|| mode = None;
+
+(* Same server nonce ==> same activation *)
+let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk2, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k2) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert1, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk1, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce1, C_sk2))
+==> C_pk1 = C_pk2 && id1 = id2 && SAtoken1 = SAtoken2 && check1 = check2 && usr1 = usr2 && U_tk1 = U_tk2
+    && c_cert1 = c_cert2 && mode1 = mode2 && ch1 = ch2
+    && (SK1 = SK2 (*{ if config["reopen"] }*)|| event(S_reopened(SC1)) || event(C_reopened(SC2))(*{ endif }*) )
+ || event(leaked_server(S_pk1));
+
 
 let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k) in
 let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
@@ -1602,8 +1791,17 @@ let SC2 = chan(c_cert2, s_cert2, mode2, ch1, SK1) in
 ==> mode1=mode2 
       || event(leaked_server(S_pk2));
 
+(* #20, same keys, same token: either the same session or a man in the middle *)
+(* /!\ cannot be proved in configuration reopen+lt_leaks *)
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1_) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK1_) in
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+==> mode1 = mode2 && ch1 = ch2 && id1 = id2 && check1 = check2
+ || mode1 = None && mode2 = None
+ || event(leaked_server(S_pk2)) && event(leaked(C_pk1));
 
-
+(* /!\ very difficult in configuration reopen+switch+lt_leaks *)
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k) in
     let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
     let SC2 = chan(c_cert2, s_cert2, mode1, ch1, SK1) in
@@ -1613,162 +1811,260 @@ let SC2 = chan(c_cert2, s_cert2, mode2, ch1, SK1) in
 ==> ( SC1 = SC2 && C_pk1 = C_pk2 && S_pk1 = S_pk2 && id1 = id2 && SAtoken1 = SAtoken2 && check1 = check2 && U_tk1 = U_tk2)
   || event(leaked_server(S_pk2));
 
+(* #22, same client signing keys and same server nonce => same activation (used for user authentication, 3.1.E )*)
+(* /!\ cannot be proved in configuration reopen+lt_leaks *)
+let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk, C_enc_k2, C_sign_k1, S_enc_k2, S_sign_k2) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk1, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce1, C_sk2))
+==> C_pk1 = C_pk2 && id1=id2 && SAtoken1=SAtoken2 && check1=check2 && SC1=SC2 && usr1=usr2 && U_tk1=U_tk2 || event(leaked(C_pk1));
+
+(* same client signing keys => same channel *)
+let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk, C_enc_k2, C_sign_k1, S_enc_k2, S_sign_k2) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+==> (SC1=SC2 && ch1=ch2 && C_pk1=C_pk2 && S_pk1=S_pk2 && mode1=mode2) || event(leaked(S_pk2));
+
+
+let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk, C_enc_k2, C_sign_k1, S_enc_k2, S_sign_k2) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2)) && event(leaked(S_pk2))
+==> SC1=SC2 || event(leaked(C_pk1));
+
+(* #25, needed by 3.2 *)
+let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk, C_enc_k2, C_sign_k1, S_enc_k2, S_sign_k2) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_S_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, er2, S_nonce2))
+==> SC1=SC2;
+
+(** New kind of lemmas capturing MiM:
+  if client and server have both logged a matching channel, then the adversary cannot learn the channel keys and tamper with the messages
+  except if both client and server are compromised *)
+let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk, C_enc_k2, C_sign_k1, S_enc_k2, S_sign_k2) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+&& attacker(C_sign_k1)
+==>  SK1 = SK2 && event(leaked(C_pk1)) && event(leaked(S_pk2));
+
+
+let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k1) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+&& attacker(S_sign_k1)
+==> SK1 = SK2 && event(leaked(C_pk1)) && event(leaked(S_pk2));
+
 (* Matching server's symmetric signature key between two server sessions => matching channels *)
-    let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
-    let SK2 = keys(chtk2, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k1) in
-    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
-    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk2, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k1) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
 
-    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er, S_nonce1))
- && event(insert_S_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, er2, S_nonce2))
-==> C_enc_k1 = C_enc_k2 && C_sign_k1 = C_sign_k2 && S_enc_k1 = S_enc_k2.
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er, S_nonce1))
+&& event(insert_S_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, er2, S_nonce2))
+==> C_enc_k1 = C_enc_k2 && C_sign_k1 = C_sign_k2 && S_enc_k1 = S_enc_k2;
 
+(* Channel opening and reopening *)
+let SC1 = chan(certify(client, crypto, C_pk), certify(server, crypto, S_pk), mode, ch, ck) in
+    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC1, usr, U_tk1, er,  S_nonce1))
+ && event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC1, usr, U_tk1, ger, S_nonce1, C_sk2))
+ && event(C_reopened(SC1))
+==> event(S_reopened(SC1))
+ || event(leaked_server(S_pk)).
+
+(* SAtokens are unique for a creation of session on the server *)
+(* axiom moved to 3.1.conf to have a wider context for SAtoken *)
 
 
 (* [LEMMA 2] can be proved in seconds without any noselect. *)
 (* Property: clients of S_sessions have private secret keys or were leaked. *)
 (*{ if "3.1.axioms" in queries["list"] }*) query (*{ else }*) axiom (*{ endif }*)
-      C_sk_2,C_sk,S_sk: skey, S_pk,S_pk2,C_pk, C_pk2: pkey, id: seid, check: smode, usr: login, U_tk: utoken, er: exponent, S_nonce, C_Nonce, S_nonce2: nonce, SAtoken: stoken, SC_: channel_,
-      ger: G, chtk:chtoken, C_enc_k,S_enc_k: sekey, C_sign_k, S_sign_k: sskey, c_cert1,s_cert1,c_cert,s_cert: certificate, ch: chid, mode,mode1: chmode, C_halfkey,S_halfkey:G, C_sharedkey:G, crypto:cryptography, SK_:chkeys;
+C_sk_2,C_sk,S_sk: skey, S_pk,S_pk2,C_pk, C_pk2: pkey, id: seid, check: smode, usr: login, U_tk: utoken, er: exponent, S_nonce, C_Nonce, S_nonce2: nonce, SAtoken: stoken, SC_: channel_,
+ger: G, chtk:chtoken, C_enc_k,S_enc_k: sekey, C_sign_k, S_sign_k: sskey, SKs: chkeys, c_cert1,s_cert1,c_cert,s_cert: certificate, ch: chid, mode,mode1: chmode,
+C_halfkey,S_halfkey,C_sharedkey:G, crypto:cryptography, SK_:chkeys, C_secret,S_secret: exponent, enc_pwd: bitstring;
 
-   (* Public keys are of the right form: pk(secret key) *)
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, U_tk, ger, S_nonce, C_sk))
-      ==> S_pk = pk(S_sk) && C_pk = pk(C_sk);
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, U_tk, er, S_nonce))
-      ==> S_pk = pk(S_sk) && C_pk = pk(C_sk);
+(* Public keys are of the right form: pk(secret key) *) (* #30, needed by 3.2 *)
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, U_tk, ger, S_nonce, C_sk))
+   ==> S_pk = pk(S_sk) && C_pk = pk(C_sk);
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, U_tk, er, S_nonce))
+   ==> S_pk = pk(S_sk) && C_pk = pk(C_sk);
 
-   (* Certs are of the right form *)
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk))
-    ==> c_cert = certify(client, crypto, C_pk2) && s_cert = certify(server, crypto, S_pk2);
+(* Certs are of the right form *)
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk))
+   ==> c_cert = certify(client, crypto, C_pk2) && s_cert = certify(server, crypto, S_pk2);
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, U_tk, er, S_nonce))
-    ==> c_cert = certify(client, crypto, C_pk2) && s_cert = certify(server, crypto, S_pk2);
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce))
+   ==> c_cert = certify(client, crypto, C_pk2) && s_cert = certify(server, crypto, S_pk2);
 
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, user_anon, ger, S_nonce, C_sk))
-      ==> usr = anonymous;
+(* #34 *)
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, user_anon, ger, S_nonce, C_sk))
+   ==> usr = anonymous;
 
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, user_anon, er, S_nonce))
-      ==> usr = anonymous;
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC_, usr, user_anon, er, S_nonce))
+   ==> usr = anonymous;
 
-(* Public keys in client/server tables are pk(secret) or leaked *)
-    event(insert_C_sessions(pk(C_sk), S_pk, id, SAtoken, check, SC_, usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_sk)
-      ==> event(leaked(pk(C_sk)));
+(* Public keys in client/server tables are pk(secret) or leaked *) (* #35 *)
+event(insert_C_sessions(pk(C_sk), S_pk, id, SAtoken, check, SC_, usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_sk)
+   ==> event(leaked(pk(C_sk)));
 
-    event(insert_C_sessions(C_pk, pk(S_sk), id, SAtoken, check, SC_, usr, U_tk, ger, S_nonce, C_sk)) && attacker(S_sk)
-      ==> event(leaked_server(pk(S_sk)));
+event(insert_C_sessions(C_pk, pk(S_sk), id, SAtoken, check, SC_, usr, U_tk, ger, S_nonce, C_sk)) && attacker(S_sk)
+   ==> event(leaked_server(pk(S_sk)));
 
-    event(insert_S_sessions(C_pk, pk(S_sk), id, SAtoken, check, SC_, usr, U_tk, er, S_nonce)) && attacker(S_sk)
-      ==> event(leaked_server(pk(S_sk)));
+event(insert_S_sessions(C_pk, pk(S_sk), id, SAtoken, check, SC_, usr, U_tk, er, S_nonce)) && attacker(S_sk)
+   ==> event(leaked_server(pk(S_sk)));
 
-    event(insert_S_sessions(pk(C_sk), S_pk, id, SAtoken, check, SC_, usr, U_tk, er, S_nonce)) && attacker(C_sk)
-      ==> event(leaked(pk(C_sk)));
+event(insert_S_sessions(pk(C_sk), S_pk, id, SAtoken, check, SC_, usr, U_tk, er, S_nonce)) && attacker(C_sk)
+   ==> event(leaked(pk(C_sk)));
 
-   (* [Channels] Symmetric signature keys are secret or private keys are leaked *)
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(S_sign_k)
-      ==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
+(* [Channels] Symmetric signature keys are secret or private keys are leaked *) (* #39*)
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(S_sign_k)
+==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_sign_k)
-      ==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_sign_k)
+==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_enc_k)
-      ==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_enc_k)
+==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(S_enc_k)
-      ==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(S_enc_k)
+==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
       
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    table(C_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(S_sign_k)
-      ==> s_cert1 = certify(server, crypto, S_pk) && event(leaked(S_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(S_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_sign_k)
+==> c_cert1 = certify(client, crypto, C_pk) && event(leaked(C_pk));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    table(C_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_sign_k)
-      ==> s_cert1 = certify(server, crypto, S_pk) && event(leaked(S_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(C_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_sign_k)
+==> s_cert1 = certify(server, crypto, S_pk) && event(leaked(S_pk));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    table(C_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_enc_k)
-      ==> s_cert1 = certify(server, crypto, S_pk) && event(leaked(S_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(C_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(C_enc_k)
+==> s_cert1 = certify(server, crypto, S_pk) && event(leaked(S_pk));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    table(C_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(S_enc_k)
-      ==> s_cert1 = certify(server, crypto, S_pk) && event(leaked(S_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(C_channels(c_cert1, s_cert1, mode1, ch, SK)) && attacker(S_enc_k)
+==> s_cert1 = certify(server, crypto, S_pk) && event(leaked(S_pk));
 
-   (* [Sessions] Symmetric signature keys are secret or private keys are leaked *)
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(S_sign_k)
-      ==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
+let SK = keys(no_token, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+table(C_channels(c_cert1, s_cert1, mode1, ch, SK))
+==> mode1 = None || s_cert1 = certify(server, crypto, S_pk) && event(leaked(S_pk));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_sign_k)
-      ==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
+(* [Sessions] Symmetric signature keys are secret or private keys are leaked *) (* #48, needed by 3.2 *)
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(S_sign_k)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_enc_k)
-      ==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_sign_k)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(S_enc_k)
-      ==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_enc_k)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(S_sign_k)
-      ==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(S_enc_k)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(C_sign_k)
-      ==> event(leaked(C_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(S_sign_k)
+==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(C_enc_k)
-      ==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(C_sign_k)
+==> event(leaked(C_pk));
 
-    let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(S_enc_k)
-      ==> event(leaked(C_pk));
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(C_enc_k)
+==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
+
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(S_enc_k)
+==> event(leaked(C_pk));
+
+(* #56, useful for 3.2 *)
+let SK = keys(no_token, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce))
+==> mode = None;
 
 (* Lemma for ECC: Sufficient to avoid the cannot be proved for 3.1/3.1.A due to noselect exp( *g, *x) *)
-    let C_enc_k_  =  enc_key_ECC(C_halfkey, S_halfkey, C_sharedkey) in
-    let SK = keys(chtk, C_enc_k_, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(C_sharedkey)
-      ==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
+let C_enc_k_  =  enc_key_ECC(C_halfkey, S_halfkey, C_sharedkey) in
+let SK = keys(chtk, C_enc_k_, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(C_sharedkey)
+==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
   
-   let S_enc_k_  =  enc_key_ECC(C_halfkey, S_halfkey, C_sharedkey) in
-   let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k_, S_sign_k) in
-   let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_sharedkey)
-      ==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
+let S_enc_k_  =  enc_key_ECC(C_halfkey, S_halfkey, C_sharedkey) in
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k_, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_sharedkey)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
 
+let C_enc_k_  =  enc_key_ECC(exp(g,C_secret), S_halfkey, C_sharedkey) in
+let SK = keys(chtk, C_enc_k_, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce)) && attacker(C_secret)
+==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
+  
+let S_enc_k_  =  enc_key_ECC(C_halfkey, exp(g,S_secret), C_sharedkey) in
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k_, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk)) && attacker(S_secret)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
 
 (* Lemma for RSA: *)
-    let C_enc_k_  =  enc_key_RSA(C_Nonce, S_nonce) in
-    let SK = keys(chtk, C_enc_k_, C_sign_k, S_enc_k, S_sign_k) in
-    let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce2)) && attacker(S_nonce)
-      ==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
+let C_enc_k_  =  enc_key_RSA(C_Nonce, S_nonce) in
+let SK = keys(chtk, C_enc_k_, C_sign_k, S_enc_k, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, er, S_nonce2)) && attacker(S_nonce)
+==> C_pk = pk(C_sk) && event(leaked(pk(C_sk)));
   
-   let S_enc_k_  =  enc_key_RSA(S_nonce, C_Nonce) in
-   let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k_, S_sign_k) in
-   let SC = chan(c_cert, s_cert, mode, ch, SK) in
-    event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce2, C_sk)) && attacker(C_Nonce)
-      ==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk))).
-(************************ END OF LEMMAS **********************************)
-(*{ endif }*) (*  3.1.axioms  *)
+let S_enc_k_  =  enc_key_RSA(S_nonce, C_Nonce) in
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k_, S_sign_k) in
+let SC = chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce2, C_sk)) && attacker(C_Nonce)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk))).
+(************************ End of 3.1.axioms **********************************)
+(*{ endif }*)
 
 (***  Lemmas for Agr[C->S] (3.2) *)
 (* BELOW ARE THE LEMMAS that can all be proved without any noselect. Just turns axioms into queries. *)
@@ -1776,12 +2072,110 @@ let SC2 = chan(c_cert2, s_cert2, mode2, ch1, SK1) in
 (* 3.2.axioms. Avoid them to prove 3.2.A, otherwise, verification seems to loop *)
 (*{ if "3.2.axioms" in queries["list"] or "3.2" in queries["list"] }*)
 (*{ if "3.2.axioms" in queries["list"] }*) query (*{ else }*) axiom (*{ endif }*)
-      chtk1,chtk2: chtoken,
-      C_enc_k1,C_enc_k2,S_enc_k1,S_enc_k2: sekey, C_sign_k1, C_sign_k2, C_sign_k,S_sign_k, S_sign_k1,S_sign_k2: sskey,
-      c_cert1,c_cert2,s_cert1,s_cert2: certificate, mode1,mode2: chmode, ch1,ch2: chid,
-      C_pk1,C_pk2,S_pk1,S_pk2: pkey, id1,id2: seid, SAtoken, SAtoken1, SAtoken2: stoken, check1,check2: smode, usr1,usr2: login, U_tk1,U_tk2: utoken,
-      er,er2: exponent, ger,ger2: G, S_nonce,S_nonce1,S_nonce2,S_nonce3: nonce, C_sk1,C_sk2:skey;
+c_cert,c_cert1,c_cert2,s_cert,s_cert1,s_cert2: certificate, mode,mode1,mode2: chmode, ch,ch1,ch2: chid,
+chtk,chtk1,chtk2: chtoken, C_pk,C_pk1,C_pk2,S_pk,S_pk1,S_pk2: pkey, SC: channel_,
+C_enc_k,C_enc_k1,C_enc_k2,S_enc_k,S_enc_k1,S_enc_k2: sekey, C_sign_k1, C_sign_k2, C_sign_k,S_sign_k, S_sign_k1,S_sign_k2: sskey,
+id,id1,id2: seid, SAtoken, SAtoken1, SAtoken2: stoken, check,check1,check2: smode,
+usr,usr1,usr2: login, U_tk,U_tk1,U_tk2: utoken, er,er2: exponent, C_halfkey,S_halfkey,C_sharedkey,ger,ger2: G,
+S_nonce,S_nonce1,S_nonce2,S_nonce3: nonce, C_sk,C_sk1,C_sk2,S_sk: skey, crypto: cryptography;
 
+(* -- Axioms taken from 3.1.axioms -- *)
+
+(*{ if not(config["reopen"]) }*)
+event(S_open_channel(ch1, mode1, crypto, true)) ==> false;
+event(C_open_channel(ch1, mode1, crypto, true)) ==> false;
+event(S_reopened(SC)) ==> false;
+event(C_reopened(SC)) ==> false;
+(*{ endif }*)
+
+(*{ if not("lt_leaks" in  config["leaks"]) }*)
+event(leaked(C_pk)) ==> false;
+event(leaked_server(S_pk)) ==> false;
+(*{ endif }*)
+
+(* With noselect, ProVerif assumes the contrary! *)
+event(leaked_server(S_pk)) ==> event(leaked(S_pk));
+
+(* Matching server's symmetric signature key and session ID => matching SAtoken *)
+(* #7, needed by ECC, Sign|Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks  *)
+   let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k) in
+   let SK2 = keys(chtk2, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k) in
+   let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+   let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
+&& event(insert_C_sessions(C_pk1, S_pk1, id1, SAtoken2, check1, SC1, usr1, U_tk1, ger, S_nonce1, C_sk2))
+==> (SAtoken1 = SAtoken2)
+   ||  event(leaked_server(S_pk1));
+
+(* True even with dishonest client/server *)
+    let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k) in
+    let SK2 = keys(chtk1, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k) in
+    let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+    let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+    event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1,  er, S_nonce1))
+ && event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+==> SK1 = SK2;
+
+(* #25, needed. Same client signing key => same channel *)
+   let SK1 = keys(chtk, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
+   let SK2 = keys(chtk, C_enc_k2, C_sign_k1, S_enc_k2, S_sign_k2) in
+   let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+   let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
+&& event(insert_S_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, er2, S_nonce2))
+==> SC1 = SC2;
+
+
+(* [LEMMA 2] can be proved in seconds without any noselect. *)
+
+(* Public keys are of the right form: pk(secret key) *) (* #30, needed by 3.2 *)
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC, usr, U_tk, ger, S_nonce, C_sk))
+   ==> S_pk = pk(S_sk) && C_pk = pk(C_sk);
+
+(* [Sessions] Symmetric signature keys are secret or private keys are leaked *) (* #48, needed by 3.2 *)
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC'= chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC', usr, U_tk, ger, S_nonce, C_sk)) && attacker(S_sign_k)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
+
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC'= chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC', usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_sign_k)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
+
+(* #56 useful for ECC, Sign|Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks *)
+let SK = keys(no_token, C_enc_k, C_sign_k, S_enc_k, S_sign_k) in
+let SC'= chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_S_sessions(C_pk, S_pk, id, SAtoken, check, SC', usr, U_tk, er, S_nonce))
+==> mode = None;
+
+(* Lemma for ECC: Sufficient to avoid the cannot be proved due to noselect exp( *g, *x) *)
+let S_enc_k_  =  enc_key_ECC(C_halfkey, S_halfkey, C_sharedkey) in
+let SK = keys(chtk, C_enc_k, C_sign_k, S_enc_k_, S_sign_k) in
+let SC'= chan(c_cert, s_cert, mode, ch, SK) in
+event(insert_C_sessions(C_pk, S_pk, id, SAtoken, check, SC', usr, U_tk, ger, S_nonce, C_sk)) && attacker(C_sharedkey)
+==> S_pk = pk(S_sk) && event(leaked_server(pk(S_sk)));
+
+(* -- 3.1.axioms.1 -- *)
+
+let SK1 = keys(chtk1, C_enc_k1, C_sign_k, S_enc_k1, S_sign_k1) in
+let SK2 = keys(chtk2, C_enc_k2, C_sign_k, S_enc_k2, S_sign_k2) in
+let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
+let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
+
+   event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken, check1, SC1, usr1, U_tk1,  er, S_nonce1))
+&& event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken, check2, SC2, usr2, U_tk2, ger, S_nonce2, C_sk2))
+==> (C_pk1 = C_pk2)  && (S_pk1 = S_pk2) && (SC1 = SC2)
+     && ((id1 = id2 && check1 = check2) || event(leaked_server(S_pk2))) (* lt_leak and (reopen or switch) *)
+     (* check1 = check2 is false in SNoAa|SSec *)
+  || event(leaked(C_pk1)) && event(leaked_server(S_pk2));
+
+(* -- New axioms for 3.2 -- *)
+
+(* Matching client signing key => matching symmetric key set *)
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k, S_enc_k1, S_sign_k1) in
     let SK2 = keys(chtk1, C_enc_k2, C_sign_k, S_enc_k2, S_sign_k2) in
     let SC1 = chan(c_cert1, s_cert1, mode1, ch1, SK1) in
@@ -1802,7 +2196,6 @@ let SC2 = chan(c_cert2, s_cert2, mode2, ch1, SK1) in
 ==> SAtoken1 = SAtoken2 && check1 = check2 && c_cert1 = c_cert2 && s_cert1 = s_cert2 && mode1 = mode2
   || event(leaked_server(S_pk1));
 
-
 (* Matching client, server and session number => matching sessions *)
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k1, S_enc_k1, S_sign_k1) in
     let SK2 = keys(chtk2, C_enc_k2, C_sign_k2, S_enc_k2, S_sign_k2) in
@@ -1822,10 +2215,9 @@ let SC2 = chan(c_cert2, s_cert2, mode2, ch1, SK1) in
     event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
  && event(insert_S_sessions(C_pk2, S_pk2, id2, SAtoken1, check2, SC2, usr2, U_tk2, er2, S_nonce2))
 ==> SK1 = SK2 && mode1 = mode2 && c_cert1 = c_cert2 && s_cert1 = s_cert2 && id1 = id2 && check1 = check2.
+
+(************************ End of 3.2.axioms **********************************)
 (*{ endif }*)
-
-(************************ END OF LEMMAS **********************************)
-
 
 (**************** Main Process ****************)
 (**********************************************)
@@ -1866,25 +2258,25 @@ process
 | (if allowed_token(user_anon) then !User_Request(anonymous)
   )
 
-  (* Create OPC-UA Servers presenting RSA and ECC certificates *)
+  (* Create OPC UA Servers presenting RSA and ECC certificates *)
 |!( new sk: skey;
     let S_pk = pk(sk) in event honest(S_pk);
     (*{ if "Conf[C]" in queries["list"] or "Conf[S]" in queries["list"] or "Conf[Pwd]" in queries["list"] }*)
     in(c, crypto: cryptography);
-    in(c, check: smode)(*{ if "3.1.axioms" in queries["list"]}*)[precise](*{endif}*);
-    in(c, (mode: chmode))
-    (*{ if "Conf[S]" in queries["list"] or "3.1.axioms" in queries["list"]}*)[precise](*{endif}*);
-    (* Refined the precise as highly costly: [precise]; for Conf[S] and 3.1.axioms *)
+    in(c, check: smode);
+    in(c, mode: chmode)(*{if "Conf[S]" in queries["list"]}*)[precise](*{endif}*);
     (*{else}*)
-    in(c, (crypto: cryptography, mode: chmode, check: smode)) [precise]; (* for Conf[S] and 3.1.axioms *)
+    in(c, (crypto: cryptography, mode: chmode, check: smode)) [precise];
     (*{endif}*)
     if allowed_crypto(crypto) && allowed_channel(mode) && allowed_session(check) then
     let S_cert = certify(server, crypto, S_pk) in out(c, S_cert);
    !Server(sk, S_cert, crypto, mode, check)
+  (*{ if not "3.1.reopen" in queries["list"] }*)
   | (if allowed_leak(lt_leaks) then event leaked(S_pk); event leaked_server(S_pk); out(c, sk))
+  (*{ endif }*)
   )
 
-  (* Create OPC-UA Client Applications *)
+  (* Create OPC UA Client Applications *)
 |!( new sk: skey;
     let C_pk = pk(sk) in event honest(C_pk);
     in(c, crypto: cryptography);
@@ -1895,7 +2287,13 @@ process
    !( in(c, (S_cert: certificate, mode: chmode, id: chid, check: smode));
       if get_kind(S_cert) = server && get_crypto(S_cert) = crypto &&
          allowed_channel(mode) && allowed_session(check)
-      then Open_Channel_Create_Session(C_cert, S_cert, sk, mode, id, check)
+      then (*{ if "3.1.reopen" in queries["list"] }*)
+         Open_Channel_Create_Session(C_cert, S_cert, sk, mode, NewCh, check) (* no reopen on client side *)
+      (*{ else }*)
+         Open_Channel_Create_Session(C_cert, S_cert, sk, mode, id, check)
+      (*{ endif }*)
     )
+  (*{ if not "3.1.confusion" in queries["list"] }*)
   | (if allowed_leak(lt_leaks) then event leaked(C_pk); out(c, sk))
+  (*{ endif }*)
   )

@@ -1,23 +1,19 @@
 (*# - THIS FILE IS A JINJA2 TEMPLATE - #*)
 (* -- THIS FILE WAS GENERATED, DO NOT EDIT -- *)
 
-(* Configuration for opcua.pv *)
+(* Configuration for tmp_opcua.pv *)
 
 (* DEBUG *)
 set movenew = (*< str_of_bool(config["movenew"]) >*).
 (* set ignoreTypes = false. *)
 set verboseClauses = (*< proverif["verboseClauses"] >*).
-(*{ if proverif["verboseRules"] }*)
-set verboseRules = true.
-(*{ endif }*)
-(*{ if not proverif["reconstructTrace"] }*)
-set reconstructTrace = false.
-(*{ endif }*)
+set verboseRules = (*< str_of_bool(proverif["verboseRules"]) >*).
+set reconstructTrace = (*< str_of_bool(proverif["reconstructTrace"]) >*).
 set removeEventsForLemma = false.
-
 (*{ if proverif["dev"] }*)
 set noselectIgnoreConclusion = false.
 (*{ endif }*)
+set redundancyElim = best. (* "best", "simple" or "no" *)
 
 (* Channels: allowed ciphers *)
 type cryptography.

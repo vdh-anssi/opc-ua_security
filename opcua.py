@@ -1,7 +1,7 @@
 #! env python3
 # This is a test script for opcua.pv on ProVerif.
 # usage :
-#  $ python3 opcua.py -m "machine-name" -s -q "query" -u -c "configuration-line" -i -r _random -t timeout --html
+#  $ python3 opcua.py [options]
 
 from config import *
 from argparse import ArgumentParser
@@ -13,7 +13,7 @@ import resource
 from subprocess import run, CalledProcessError, TimeoutExpired, Popen, PIPE
 
 CONF_TEMPLATE = "config-jinja.pvl"
-TARGET = "opcua.pv"
+TARG_TEMPLATE = "opcua-jinja.pv"
 CONF = "tmp_conf"
 TARG = "tmp_opcua"
 OUTDIR = "output"
@@ -44,7 +44,7 @@ def generate_conf(conf_file, config, proverif, rnd_ext):
    return conf_file
 
 def generate_targ(pv_file, config, proverif, queries, rnd_ext, auth, fixed, KCI, oracle):
-   with open(TARGET, "r") as ctf:
+   with open(TARG_TEMPLATE, "r") as ctf:
       tmpl = Template(
          ctf.read(),
          block_start_string    = '(*{',
@@ -122,10 +122,12 @@ parser = ArgumentParser(
 )
 parser.add_argument('-a', '--authenticated', action='store_true')
 parser.add_argument('-c', '--config')
-parser.add_argument('-d', '--development',  help='use customized proverif',           action='store_true')
-parser.add_argument(      '--html',         help='put results in directory "output"', action='store_true')
+parser.add_argument('-d', '--development',   help='use customized proverif',           action='store_true')
+parser.add_argument(      '--html',          help='put results in directory "output"', action='store_true')
 parser.add_argument('-l', '--limit')
+parser.add_argument('-m', '--model',         help='location and name of the main proverif file')
 parser.add_argument('-n', '--not_fixed',     action='store_true')
+parser.add_argument(   '--no_reconstruction',action='store_true')
 parser.add_argument('-o', '--oracle',        action='store_true')
 parser.add_argument('-q', '--query')
 parser.add_argument('-r', '--random')
@@ -146,6 +148,10 @@ if args.limit != None:
    DATA_LIMIT = int(args.limit) * GiB
 else:
    DATA_LIMIT = 100 * GiB
+if args.model:
+   TARG_TEMPLATE = args.model
+if args.no_reconstruction:
+   proverif["reconstructTrace"] = False
 if args.not_fixed:
    fixed = False
 if args.oracle:
@@ -153,9 +159,6 @@ if args.oracle:
 if args.query != None:
    queries["list"] = args.query.replace(' ', '').split(',')
    queries["Sanity"]          = False
-   queries["Confidentiality"] = True
-   queries["Integrity"]       = True
-   queries["Authentication"]  = True
 if args.random != None:
    rnd_ext = args.random
 else:
@@ -204,7 +207,7 @@ exe += ['-lib', conf_file, targ_file]
 try:
    t = datetime.now()
    p = Popen(exe, start_new_session=False, stdin=PIPE, encoding='utf-8')
-   if platform.system() == "Linux":
+   if args.limit != None and platform.system() == "Linux":
       resource.prlimit(p.pid, resource.RLIMIT_AS, (DATA_LIMIT*8//10, DATA_LIMIT))
    if args.timeout != None:
       outs, errs = p.communicate(timeout = TIMEOUT)

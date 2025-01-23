@@ -15,8 +15,8 @@ config["leaks"]  = ["no_leaks", "ch_leaks", "lt_leaks"]
 authenticated = False # Authenticated cryptography in ECC.
 KCI = True # Key Compromise Impersonation of user authenticated by certificate.
            # True, since the fix we designed for the KCI attack is not yet accepted/standardized.
-oracle = False # ECC signature oracle
-fixed = True # Fixed ECC spoofing
+oracle = False # ECC signature oracle. False by default since the fix we designed is accepted.
+fixed = True # Fixed ECC client impersonation attack. True since by default since the fix we designed is accepted.
 
 queries = {}
 proverif = {}
@@ -27,9 +27,6 @@ configuration = "ECC, None, no_reopen, SSec, pwd, no_switch, no_leaks"
 
 # Custom queries:
 queries["Sanity"]          = True
-queries["Confidentiality"] = True
-queries["Integrity"]       = True
-queries["Authentication"]  = True
 queries["Unconditioned"]   = True
 
 # To target specific queries

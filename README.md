@@ -1,4 +1,4 @@
-A Formal Security Analysis of OPC-UA.
+A Formal Security Analysis of OPC UA.
 =====================================
 
 This file gives detailed instructions on how to use ProVerif to:
@@ -9,61 +9,82 @@ This file gives detailed instructions on how to use ProVerif to:
 
 # Installation
 
-You need to build the development version of ProVerif, from the sources on branch "improved_scope_lemma" (this requires a working ocaml compiler):
+You need to build the development version of ProVerif, from the sources on branch "improved_scope_lemma" (this requires a working OCaml compiler, see https://ocaml.org/):
  - `$ git clone https://gitlab.inria.fr/bblanche/proverif.git`
  - `$ cd proverif/proverif`
  - `$ git checkout improved_scope_lemma`
+ - `$ git checkout 6a803aa13ccde13c0574912da93f029f86f63951`
  - `$ ./build`
  - `$ ./proverif --help`
 
 Results in this file have been obtained with Proverif development, branch improved_scope_lemma, commit 6a803aa13ccde13c0574912da93f029f86f63951. The branch improved_scope_lemma has been previously used in 
-> Cheval, Vincent, Véronique Cortier, and Alexandre Debant. "Election Verifiability with ProVerif." 2023 IEEE 36th Computer Security Foundations Symposium (CSF). IEEE, 2023.
-
-(Attacks can be found with the ProVerif version 2.05, available at https://bblanche.gitlabpages.inria.fr/proverif/, as well as the proofs for the confidentiality properties but the development version is required for proving the agreement properties. We thus recommend using the aforementioned development version.)
+> Vincent Cheval, Véronique Cortier and Alexandre Debant. "Election Verifiability with ProVerif." IEEE 36th Computer Security Foundations Symposium (CSF). 2023.
 
 Make sure that the proverif executable is in your path and available from the command line.
-You also need python 3.11 with Jinja2 (https://pypi.org/project/Jinja2/), to run the tool "opcua.py", that generates the input files and launch proverif.
+You also need Python 3.11 (or above) with Jinja2 (https://pypi.org/project/Jinja2/), to run the tool "opcua.py", that generates the input files and launch proverif.
  - `$ pip install jinja2`
 
 
 # To reproduce the automatic attack finding described in the paper
 
-These experiments have been conducted on a standard laptop. 
+These experiments have been conducted on a standard laptop with 15 GiB or RAM (except query 3.1.B that requires at least 30 GiB in ECC).
 
-§5.2 Race condition for user contexts breaking Agr[S->C]:
- - `$ python3 opcua.py -q "3.1.0" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, no_leaks" --html --not_fixed`
-open the file `output/trace1.pdf`
-The attack is found and reconstructed in less than 10s.
-"3.1.0" is the initial Agr[S->C] property discussed in the paper.
+§5.1 Race condition for user contexts breaking Agr[S->C]:
+ - `$ python3 opcua.py -q "3.1.race" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, no_leaks" --html`
+"3.1.race" is the initial Agr[S->C] property discussed in the paper.
 `--not_fixed` indicates that the server's thumbprint is not included in ECC mode.
 `-c` specifies the configuration.
-See below how we can establish a security proof when our fix is used.
+The attack is found and reconstructed in less than 10s, and depicted in the file `output/trace1.pdf`.
+This scenario is very close to the one described in the paper in §5.1 and illustrated in Appendix §B.1, figure 10.
 
-§5.2 Race condition for user contexts breaking Agr[C->S]:
- - `$ python3 opcua.py -q "3.2.0" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, no_leaks" --html --not_fixed`
-open the file `output/trace1.pdf`
-The attack is found and reconstructed in less than 5s.
-"3.2.0" is the initial Agr[C->S] property discussed in the paper.
-See below how we can establish a security proof when our fix is used.
+§5.1 Race condition for user contexts breaking Agr[C->S]:
+ - `$ python3 opcua.py -q "3.2.race" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, no_leaks" --html`
+"3.2.race" is the initial Agr[C->S] property discussed in the paper.
+The attack is found and reconstructed in less than 10s, and depicted in the file `output/trace1.pdf`.
+This scenario is mentioned in the paper in Appendix §B.1 as an adaptation of the previous attack but on user responses.
 
+§5.2 ECC client impersonation attack:
+- `$ python3 opcua.py -q "3.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --html --not_fixed`
+"3.1" is Agr-[S->C], weakened to tolerate race conditions and KCI attacks.
+The attack is found and reconstructed in less than 10s, and depicted in the file `output/trace1.pdf`.
+This scenario is very close to the one described in the paper in §5.2 and illustrated in Appendix §B.2, figure 11.
+See below how we can establish a security proof for Agr-[S->C] when our fix is used.
 
-§5.3 ECC client impersonation attack and §5.4 KCI attack:
- - `$ python3 opcua.py -q "3.1" -u -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --html --not_fixed`
-§5.2 KCI attack: open the file `output/trace1.pdf`
-§5.3 ECC client impersonation attack: open the file `output/trace2.pdf`
-"3.1" -u: checks both Agr[S->C] weakened to tolerate race conditions and KCI attacks
-The attack is found and reconstructed in less than 20s.
+§5.3 KCI User Impersonation attack:
+- `$ python3 opcua.py -q "3.1.KCI_UI" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --html`
+The attack is found and reconstructed in less than 5s, and depicted in the file `output/trace1.pdf`.
+This scenario is very close to the one described in the paper in §5.3 and illustrated in Appendix §B.3, figure 16.
 
-§5.5 Downgrade of password secrecy:
+§5.4 Session hijack by reopening:
+- `$ python3 opcua.py -q "3.1.reopen" -c "ECC, Sign, reopen, SSec, cert, no_switch, lt_leaks" --html`
+The attack is found and reconstructed in less than 30m, and depicted in the file `output/trace1.pdf`.
+(In RSA, it takes only 50s, and it is depicted in the file `output/trace2.pdf`).
+This scenario is very close to the one described in the paper in §5.4 and illustrated in Appendix §B.4, figure 12.
+
+§5.5 KCI: session and user confusion:
+- `$ python3 opcua.py -q "3.1.confusion" -c "RSA, Encrypt, reopen, SSec, cert, no_switch, lt_leaks" --html --no_reconstruction`
+The attack is found in less than 03s, but Proverif cannot reconstruct it and terminates with "cannot be proved".
+In the file `output/index.html`, a reachable goal shows that Proverif is able to construct a clause that contradicts the query:
+ - the server has received a user request "C_val_4" in a session called "s_2" authenticated by "SAtoken_13", that is currently hold by user "usr_7"
+ - the client has sent the same user request "C_val_4", but in a session called "id_131" also authenticated by "SAtoken_13", for a user called "usr_8"
+The "Derivation" (file `output/derivation1.html`) shows that:
+ - "SAtoken_13" was given by the client to the attacker, that impersonated the compromised server (thanks to the leak of the server secret key S_sk_3), through a legitimate activation request for a user "usr_9". (It could have been any request in fact).
+ - "usr_8" is not known to the server and does not appear in any derivation of a server event.
+This scenario is very close to the one described in the paper in §5.5 and illustrated in Appendix §B.5, figure 15.
+
+§5.6 Downgrade of password secrecy:
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, Encrypt, no_reopen, SSec, pwd, no_switch, ch_leaks" --html`
-open the file `output/trace1.pdf`
-The attack is found and reconstructed in less than 20s.
+The attack is found and reconstructed in less than 25s, and depicted in the file `output/trace1.pdf`.
+This scenario is very close to the one described in the paper in Appendix §B.6.1.
+Note that the property is true in mode "Sign" instead of "Encrypt".
 
 §5.6 Risk of Signature Oracle:
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None, no_reopen, SNoAA, pwd, no_switch, lt_leaks" --oracle --html`
-open the file `output/trace1.pdf`
-The attack is found and reconstructed in less than 32m.
-`--oracle` indicates that the client certificate is not parsed (leading to the signature oracle), as tolerated by the OPC-UA specification for "No Application Authentication" in version 1.05.03.
+`--oracle` indicates that the client certificate is not parsed (leading to the signature oracle), as tolerated by the OPC UA specification for "No Application Authentication" in version 1.05.03.
+The attack is found and reconstructed in less than 25m, and depicted in the file `output/trace1.pdf`.
+It shows an attack against the user password that is made through the use of the Signature Oracle, when No Application Authentication (SNoAA) is used.
+The Signature Oracle is described in the paper in Appendix §B.6.2 and illustrated in figure 14.
+Note that the security property Conf[Pwd] is true when our fix is used, i.e. when no signature oracle is allowed (without `--oracle`).
 
 
 # To reproduce the security proofs for our fixes
@@ -73,51 +94,39 @@ We illustrate here how to launch Proverif on some representative configurations 
 Verification times are indicative and may vary depending on your machine.
 
 ##  For the weakened property Agr-[S->C]
-Property "3.1" refers to the weakened Agr-[S->C] (to tolerate the KCI attack and race condition.)
+Property "3.1" refers to the weakened Agr-[S->C] (to tolerate the KCI attacks and race condition).
 As explained in the paper, we use a series of lemmas and advanced techniques that depend on the set of sub-lemmas that need to be proven.
-As a result, one need to prove the following queries: "3.1.axioms", "3.1.axioms.1", "3.1.A", "3.1.B", "3.1.D", "3.1.E", and finally "3.1" that relies on all of those other lemmas. (Note that "3.1.C" is a syntactic axiom.)
+As mentioned in the file `dependencies.txt`, one needs to prove the following queries: "3.1.axioms", "3.1.axioms.1", "3.1.conf", "3.1.A", "3.1.B", "3.1.C", "3.1.D", "3.1.E", and finally "3.1" that relies on all of those other lemmas.
 
 Proofs for this property requires to first prove a number of lemmas that we assume (axioms) during the proof of the weakened Agr[S->C].
- - `$ python3 opcua.py -q "3.1.axioms" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py -q "3.1.axioms.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py -q "3.1.A" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py -q "3.1.B" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
- - `$ python3 opcua.py -q "3.1.D" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py -q "3.1.E" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
- - `$ python3 opcua.py -q "3.1"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
-As we are able to prove this main query "3.1" corresponding to Agr-[S->C], we show that our fixes resolve the attack that was found in the same configurations. Other configurations can be proven too (see `results.md`).
+ - `$ python3 opcua.py -q "3.1.axioms"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (8s)
+ - `$ python3 opcua.py -q "3.1.axioms.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1s)
+ - `$ python3 opcua.py -q "3.1.conf"     -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1s)
+ - `$ python3 opcua.py -q "3.1.A"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
+ - `$ python3 opcua.py -q "3.1.B"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (23h and > 30 GiB)
+ - `$ python3 opcua.py -q "3.1.C"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1s)
+ - `$ python3 opcua.py -q "3.1.D"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (4s)
+ - `$ python3 opcua.py -q "3.1.E"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
+ - `$ python3 opcua.py -q "3.1"          -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (30s)
+As we are able to prove this main query "3.1" corresponding to Agr-[S->C], we show that our fixes resolve the attack that was found in the same configurations (see above §5.2 ECC client impersonation attack with "--not_fixed"). Other configurations can be proven too (see `results.md`).
 
 ##  For the weakened property Agr-[C->S]
-Similarly, the query "3.2" relies on "3.2.axioms", "3.2.A" and all "3.1.*" queries discussed above.
+Similarly, the query "3.2" relies on "3.2.axioms", "3.2.A", but also on "3.1.A" and "3.1.C", two of the lemmas above.
 One should launch:
- - `$ python3 opcua.py -q "3.2.axioms" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py -q "3.2.A"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (5s)
- - `$ python3 opcua.py -q "3.2"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (2m)
-As we are able to prove this main query "3.2" corresponding to Agr-[C->S], we show that our fixes resolve the attack that was found in the same configurations. Other configurations can be proven too (see `results.md`).
-
-## For the property Conf[C]:
-Maximal configurations (including "switch") when the Security Policy is RSA:
- - `$ python3 opcua.py -q "Conf[C]" -c "RSA, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, switch, lt_leaks"` (30s)
-Maximal configurations (including "switch"), but no key leaks when the Security Policy is ECC:
- - `$ python3 opcua.py -q "Conf[C]" -c "ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, switch, no_leaks"` (10s)
-Maximal configurations except when "switch" is disabled:
- - `$ python3 opcua.py -q "Conf[C]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, no_switch, lt_leaks"` (5m)
-
-## For the property Conf[S]:
-Maximal configurations (including "switch") when the Security Policy is RSA:
- - `$ python3 opcua.py -q "Conf[S]" -c "RSA, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, switch, lt_leaks"` (3m)
-Maximal configurations (including "switch"), but no key leaks when the Security Policy is ECC:
- - `$ python3 opcua.py -q "Conf[S]" -c "ECC, Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, switch, no_leaks"` (10s)
-Maximal configurations except when "switch" is disabled:
- - `$ python3 opcua.py -q "Conf[S]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, no_switch, lt_leaks"` (25m)
+ - `$ python3 opcua.py -q "3.1.A"      -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (1m)
+ - `$ python3 opcua.py -q "3.1.C"      -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (1s)
+ - `$ python3 opcua.py -q "3.2.axioms" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (2s)
+ - `$ python3 opcua.py -q "3.2.A"      -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (1s)
+ - `$ python3 opcua.py -q "3.2"        -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (8s)
+As we are able to prove this main query "3.2" corresponding to Agr-[C->S]. Other configurations can be proven too (see `results.md`).
 
 ## For the property Conf[Pwd]:
-Configuration with long-term key leaks, but no channel leaks:
- - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, Encrypt, no_reopen, SSec, pwd, no_switch, lt_leaks"` (1s)
 Password confidentiality when no signature oracle is allowed (i.e., we enforce parsing of certificates even when SessionSecurity includes SNoAA):
- - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None, reopen, SNoAA|SSec, pwd, switch, lt_leaks"`: (3s)
- - `$ python3 opcua.py -q "Conf[Pwd]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA, pwd, switch, no_leaks"` (24s)
-In a subset of this configuration an attack was found using `--oracle`. The version 1.05.04 RC with our fix to the signature oracle attack is obtained without `--oracle` and can be proven secure with the command just above.
+ - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None, reopen, SNoAA|SSec, pwd, switch, lt_leaks"`: (1m)
+ - `$ python3 opcua.py -q "Conf[Pwd]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, pwd, switch, no_leaks"` (2m)
+In a subset of this configuration an attack was found using `--oracle` (see §5.6 Risk of Signature Oracle).
+The version 1.05.04 RC with our fix to the signature oracle attack is obtained without `--oracle` and can be proved secure with the command just above.
+
 
 
 # Instructions to launch lattice exploration campaigns
