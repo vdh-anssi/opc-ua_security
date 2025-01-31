@@ -53,10 +53,10 @@ else:
 QUERY  = args.query
 print("Proving quer", end='')
 if  QUERY == "3.1.all":
-   QUERIES = ["3.1", "3.1.A", "3.1.B", "3.1.C", "3.1.D", "3.1.E",  "3.1.conf", "3.1.axioms", "3.1.axioms.1"]
+   QUERIES = ["3.1", "3.1.A", "3.1.B", "3.1.C", "3.1.D", "3.1.E", "3.1.axioms", "3.1.axioms.1", "3.1.conf"]
    print("ies: " + ', '.join(QUERIES), end='')
 elif QUERY == "3.2.all":
-   QUERIES = ["3.2", "3.2.A", "3.2.axioms", "3.1.A", "3.1.C"]
+   QUERIES = ["3.2", "3.2.A", "3.2.axioms", "3.1.A", "3.1.C", "3.1.axioms"]
    print("ies: " + ', '.join(QUERIES), end='')
 else:
    QUERIES = [QUERY]

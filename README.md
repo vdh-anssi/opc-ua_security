@@ -7,6 +7,10 @@ This file gives detailed instructions on how to use ProVerif to:
  - prove the properties in the fixed variant for further configurations
  - launch lattice exploration campaigns.
 
+# License
+
+GNU General Public License v3 (see file `LICENCE.md` and https://www.gnu.org/licenses/gpl-3.0.html).
+
 # Installation
 
 You need to build the development version of ProVerif, from the sources on branch "improved_scope_lemma" (this requires a working OCaml compiler, see https://ocaml.org/):
@@ -61,7 +65,7 @@ The attack is found and reconstructed in less than 30m, and depicted in the file
 (In RSA, it takes only 50s, and it is depicted in the file `output/trace2.pdf`).
 This scenario is very close to the one described in the paper in §5.4 and illustrated in Appendix §B.4, figure 12.
 
-§5.5 KCI: session and user confusion:
+§5.5 KCI session and user confusion:
 - `$ python3 opcua.py -q "3.1.confusion" -c "RSA, Encrypt, reopen, SSec, cert, no_switch, lt_leaks" --html --no_reconstruction`
 The attack is found in less than 03s, but Proverif cannot reconstruct it and terminates with "cannot be proved".
 In the file `output/index.html`, a reachable goal shows that Proverif is able to construct a clause that contradicts the query:

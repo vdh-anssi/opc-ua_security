@@ -7,7 +7,8 @@
    Description of the protocol, threat model, security objectives and analysis
    results are in the companion technical report:
             "A Comprehensive Formal Security Analysis of OPC UA"
-   by [authors' names were retracted].
+   by Vincent Diemunsch, Lucca Hirschi and Steve Kremer,
+   Université de Lorraine, CNRS, Inria, LORIA, France.
    See README.md for more information about how to run this file.
 ******************************************************************************)
 
@@ -453,7 +454,7 @@ let Create_Session (C_sk: skey, SC: channel_, check: smode) =
    let key_tk = (if mode = None then no_token else (
       let keys(key_tk: chtoken, w: sekey, x: sskey, y: sekey, z: sskey) = symkeys in (key_tk) )) in
    (* If application authentication is enabled, we need to:
-    * - provide an client application certificate and an fresh nonce
+    * - provide a client application certificate and a fresh nonce
     * - verify the signature returned by the server.*)
    (* Application authentication on client side is always enabled unless check = SNone *)
    new RqID[key_tk, check]: nonce; out(c, RqID); (* the request number is predictable *)
@@ -492,7 +493,7 @@ let Open_Channel_Create_Session (C_cert,S_cert: certificate, C_sk: skey, mode: c
    let S_pk = get_pk(S_cert) in
    new RqID    [C_pk, S_pk, mode, id]: nonce;  (* C_pk is NOT implicit *)
    out(c, RqID); (* Request Id is predictable *)
-   (*{ if "3.1.axioms" or "3.1.confusion" in queries["list"] }*)
+   (*{ if "3.1.axioms" in queries["list"] }*)
    new C_Nonce [S_pk, id, mode]: nonce;   (* RSA *)
    new C_Secret[S_pk, id, mode]: exponent;(* ECC *)
    (*{ else }*)
@@ -1413,7 +1414,7 @@ event(C_Activation(C_pk, S_pk, mode, check, sn, usr, U_tk))
 
 
 (* [LEMMA D] only for RSA. *)
-(*{ if fixed and ("3.1.D" in queries["list"] or "3.1" in queries["list"] ) }*)
+(*{ if fixed and ("3.1.D" in queries["list"] or "3.1" in queries["list"]) }*)
 (*{ if "3.1.D" in queries["list"] }*)
 query (*{ else }*) axiom (*{ endif }*) src,dst: pkey, n: nonce, mode: chmode;
    event(honest(src)) && event(honest(dst)) &&
@@ -1488,13 +1489,13 @@ restriction C_n1: bitstring, S_n1,S_n2: nonce;
 
 
 (*{ if fixed and
-   ("3.1.axioms.1" in queries["list"] or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.E" in queries["list"]) }*)
+   ("3.1.axioms.1" in queries["list"] or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]) }*)
 (* Matching client's symmetric signature key + SAtoken => matching channel+session *)
 
 (*{ if not "3.1.axioms.1" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
 chtk1,chtk2: chtoken, C_enc_k1,C_enc_k2,S_enc_k1,S_enc_k2: sekey, C_sign_k1, C_sign_k2, C_sign_k,S_sign_k, S_sign_k1,S_sign_k2: sskey,
 c_cert1,c_cert2,s_cert1,s_cert2: certificate, mode1,mode2: chmode, ch1,ch2: chid,
-C_pk1,C_pk2,S_pk1,S_pk2: pkey, C_sk2: skey, id1,id2: seid, SAtoken: stoken, check1,check2: smode, usr1,usr2: login, U_tk1,U_tk2: utoken,
+C_pk1,C_pk2,S_pk1,S_pk2,rogue_server: pkey, C_sk2: skey, id1,id2: seid, SAtoken: stoken, check1,check2: smode, usr1,usr2: login, U_tk1,U_tk2: utoken,
 er: exponent, ger: G, S_nonce1,S_nonce2: nonce;
 
     let SK1 = keys(chtk1, C_enc_k1, C_sign_k, S_enc_k1, S_sign_k1) in
@@ -1513,7 +1514,7 @@ er: exponent, ger: G, S_nonce1,S_nonce2: nonce;
 
 (* 3.1.conf *)
 (*{ if fixed and ("3.1.conf" in queries["list"]
-  or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.E" in queries["list"] ) }*)
+  or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]) }*)
 (*{ if not "3.1.conf" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
 C_cert,S_cert: certificate, C_pk,S_pk: pkey, ch,ch1,ch2: chid, mode: chmode, SKs,SK1,SK2: chkeys, id: seid, SAtoken: stoken,
 check: smode, usr: login, U_tk: utoken, er: exponent, ger: G, S_nonce: nonce, C_sk: skey;
@@ -1550,7 +1551,7 @@ let SC2 = chan(c_cert, s_cert, mode2, ch2, SK2) in
 
 (* 3.1.axioms *)
 (*{ if fixed and ("3.1.axioms" in queries["list"]
-  or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]) }*)
+  or "3.1" in queries["list"] or "3.1.A" in queries["list"] or "3.1.B" in queries["list"] or "3.1.C" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]) }*)
 (*{ if not "3.1.axioms" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
 srv:pkey; event(leaked_server(srv)) ==> event(leaked(srv)).
 
@@ -2214,7 +2215,11 @@ let SC2 = chan(c_cert2, s_cert2, mode2, ch2, SK2) in
 
     event(insert_S_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, er,  S_nonce1))
  && event(insert_S_sessions(C_pk2, S_pk2, id2, SAtoken1, check2, SC2, usr2, U_tk2, er2, S_nonce2))
-==> SK1 = SK2 && mode1 = mode2 && c_cert1 = c_cert2 && s_cert1 = s_cert2 && id1 = id2 && check1 = check2.
+==> SK1 = SK2 && mode1 = mode2 && c_cert1 = c_cert2 && s_cert1 = s_cert2 && id1 = id2 && check1 = check2;
+
+attacker(certify(server, crypto, pk(S_sk))) && attacker(S_sk) ==> event(leaked_server(pk(S_sk)));
+attacker(certify(client, crypto, pk(C_sk1))) && attacker(C_sk1) ==> event(leaked(pk(C_sk1))).
+
 
 (************************ End of 3.2.axioms **********************************)
 (*{ endif }*)
