@@ -88,7 +88,6 @@ Examples of configurations, where all lemmas and the property are proven (verifi
  - ECC|RSA,      Sign|Encrypt,    reopen,       SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
  - ECC|RSA, None|     Encrypt, no_reopen, SNoAA,           pwd|cert,    switch, no_leaks (3.1.B 9m)
  - ECC|RSA, None|     Encrypt, no_reopen,       SSec, anon|pwd|cert,    switch, no_leaks (3.1.B 2h)
-
  -     RSA, None|Sign,         no_reopen,       SSec, anon|    cert, no_switch, lt_leaks (3.1.axioms 7m)
  - ECC,               Encrypt, no_reopen, SNoAA,               cert, no_switch, lt_leaks (3.1.B 23h)
  - ECC,               Encrypt, no_reopen,       SSec,          cert, no_switch, lt_leaks (3.1.B 22h)
@@ -97,11 +96,11 @@ Examples of configurations, where all lemmas and the property are proven (verifi
 
 ##  Summary of results for the weakened property Agr-[C->S]
 
-Similarly, property "3.2" refers to the weakened version of Agr-[C->S]. Its proof relies on "3.2.axioms", "3.2.A", but also on "3.1.A" and "3.1.C", two of the lemmas used also for "3.1", that require 3.1.axioms.
+Similarly, property "3.2" refers to the weakened version of Agr-[C->S]. Its proof relies on "3.2.axioms", "3.2.A", but also on "3.1.A" and "3.1.C". When "ECC" is present in the configuration, we should also prove "3.1.axioms" (because "3.1.A" and "3.1.C" assume "3.1.axioms" in that case; see `dependencies.txt`).
 
 Examples of configurations, where all lemmas and the property are proven:
  - ECC|RSA, None|Sign|Encrypt, no_reopen, SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 1m)
  - ECC|RSA, None|Sign|Encrypt,    reopen, SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 4h)
  - ECC|RSA, None,                 reopen, SSec, anon|pwd|cert,    switch,    lt_leaks (3.1.A 1h)
- -     RSA, None|Sign,            reopen, SSec, anon|pwd|cert,    switch,    lt_leaks
+ -     RSA, None|Sign,            reopen, SSec, anon|pwd|cert,    switch,    lt_leaks (3.1.A 42m)
  - ECC|RSA,      Sign|Encrypt,    reopen, SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
