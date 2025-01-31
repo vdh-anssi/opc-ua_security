@@ -120,8 +120,7 @@ Proofs for this property requires to first prove a number of lemmas that we assu
 As we are able to prove this main query "3.1" corresponding to Agr-[S->C], we show that our fixes resolve the attack that was found in the same configurations (see above §5.2 ECC client impersonation attack with "--not_fixed"). Other configurations can be proven too (see `results.md`).
 
 ##  For the weakened property Agr-[C->S]
-Similarly, the query "3.2" relies on "3.2.axioms", "3.2.A", but also on "3.1.A" and "3.1.C", two of the lemmas above, that require 3.1.axioms.
-One should launch:
+Similarly, the query "3.2" relies on "3.2.axioms", "3.2.A", but also on "3.1.A" and "3.1.C". When "ECC" is present in the configuration, we also prove "3.1.axioms" (because "3.1.A" and "3.1.C" assume "3.1.axioms" in that case; see `dependencies.txt`).
  - `$ python3 opcua.py -q "3.1.axioms" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (6s)
  - `$ python3 opcua.py -q "3.1.A"      -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (1m)
  - `$ python3 opcua.py -q "3.1.C"      -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (1s)
