@@ -103,6 +103,5 @@ Examples of configurations, where all lemmas and the property are proven:
  - ECC|RSA, None|Sign|Encrypt, no_reopen, SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 1m)
  - ECC|RSA, None|Sign|Encrypt,    reopen, SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 4h)
  - ECC|RSA, None,                 reopen, SSec, anon|pwd|cert,    switch,    lt_leaks (3.1.A 1h)
+ -     RSA, None|Sign,            reopen, SSec, anon|pwd|cert,    switch,    lt_leaks
  - ECC|RSA,      Sign|Encrypt,    reopen, SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
-
-
