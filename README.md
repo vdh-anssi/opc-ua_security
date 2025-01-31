@@ -1,7 +1,10 @@
 A Formal Security Analysis of OPC UA.
 =====================================
 
-This file gives detailed instructions on how to use ProVerif to:
+This file describes the companion artifact of the USENIX Security 2025 paper of V. Diemunsch, L. Hirschi, and S. Kremer.
+Full version of this paper on IACR eprint at `https://eprint.iacr.org/2025/148`.
+
+It gives detailed instructions on how to use ProVerif to:
  - find attacks and get detailed attack traces as PDF files
  - prove that our fixes provably repair the protocols for the configurations for which we found the attacks
  - prove the properties in the fixed variant for further configurations
