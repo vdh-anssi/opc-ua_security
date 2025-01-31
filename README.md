@@ -2,7 +2,7 @@ A Formal Security Analysis of OPC UA.
 =====================================
 
 This file describes the companion artifact of the USENIX Security 2025 paper of V. Diemunsch, L. Hirschi, and S. Kremer.
-Full version of this paper on IACR eprint at `https://eprint.iacr.org/2025/148`.
+Full version of this paper on IACR eprint at https://eprint.iacr.org/2025/148.
 
 It gives detailed instructions on how to use ProVerif to:
  - find attacks and get detailed attack traces as PDF files
@@ -10,9 +10,11 @@ It gives detailed instructions on how to use ProVerif to:
  - prove the properties in the fixed variant for further configurations
  - launch lattice exploration campaigns.
 
+
 # License
 
 GNU General Public License v3 (see file `LICENCE.md` and https://www.gnu.org/licenses/gpl-3.0.html).
+
 
 # Installation
 
@@ -133,7 +135,6 @@ Password confidentiality when no signature oracle is allowed (i.e., we enforce p
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, pwd, switch, no_leaks"` (2m)
 In a subset of this configuration an attack was found using `--oracle` (see §5.6 Risk of Signature Oracle).
 The version 1.05.04 RC with our fix to the signature oracle attack is obtained without `--oracle` and can be proved secure with the command just above.
-
 
 
 # Instructions to launch lattice exploration campaigns
