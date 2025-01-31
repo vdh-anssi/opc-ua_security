@@ -1468,8 +1468,7 @@ event(S_Activation(src, dst, mode, check, sn, usr, utk))
     event(insert_C_sessions(C_pk1, S_pk1, id1, SAtoken1, check1, SC1, usr1, U_tk1, ger,  S_nonce1, C_sk1))
  && event(insert_C_sessions(C_pk2, S_pk2, id2, SAtoken2, check2, SC2, usr2, U_tk2, ger2, S_nonce2, C_sk2))
 ==> C_enc_k1 = C_enc_k2 && S_enc_k1 = S_enc_k2 && S_sign_k1 = S_sign_k2 
-    (* && chtk1 = chtk2 
-    && ch1 = ch2 *) (* previous two lines not required to prove 3.2 *)
+    (* && chtk1 = chtk2 && ch1 = ch2 *) (* not required to prove 3.2 *)
     && C_pk1 = C_pk2 && S_pk1 = S_pk2.
 (*{ endif }*)
 
@@ -1551,7 +1550,8 @@ let SC2 = chan(c_cert, s_cert, mode2, ch2, SK2) in
 
 (* 3.1.axioms *)
 (*{ if fixed and ("3.1.axioms" in queries["list"]
-  or "3.1" in queries["list"] or "3.1.A" in queries["list"] or "3.1.B" in queries["list"] or "3.1.C" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]) }*)
+  or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]  
+  or (("3.1.A" in queries["list"] or "3.1.C" in queries["list"]) and "ECC" in config["crypto"])) }*)
 (*{ if not "3.1.axioms" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
 srv:pkey; event(leaked_server(srv)) ==> event(leaked(srv)).
 
