@@ -99,8 +99,9 @@ Examples of configurations, where all lemmas and the property are proven (verifi
 Similarly, property "3.2" refers to the weakened version of Agr-[C->S]. Its proof relies on "3.2.axioms", "3.2.A", but also on "3.1.A" and "3.1.C". When "ECC" is present in the configuration, we should also prove "3.1.axioms" (because "3.1.A" and "3.1.C" assume "3.1.axioms" in that case; see `dependencies.txt`).
 
 Examples of configurations, where all lemmas and the property are proven:
- - ECC|RSA, None|Sign|Encrypt, no_reopen, SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 1m)
- - ECC|RSA, None|Sign|Encrypt,    reopen, SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 4h)
- - ECC|RSA, None,                 reopen, SSec, anon|pwd|cert,    switch,    lt_leaks (3.1.A 1h)
- -     RSA, None|Sign,            reopen, SSec, anon|pwd|cert,    switch,    lt_leaks (3.1.A 42m)
- - ECC|RSA,      Sign|Encrypt,    reopen, SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
+ - ECC|RSA, None|Sign|Encrypt, no_reopen,       SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 1m)
+ - ECC|RSA, None|Sign|Encrypt,    reopen,       SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 4h)
+ - ECC|RSA, None|Sign|Encrypt,    reopen, SNoAA,      anon|    cert, no_switch, no_leaks (3.1.axioms 3h)
+ - ECC|RSA, None,                 reopen,       SSec, anon|pwd|cert,    switch, lt_leaks (3.1.A 1h)
+ -     RSA, None|Sign,            reopen,       SSec, anon|pwd|cert,    switch, lt_leaks (3.1.A 42m)
+ - ECC|RSA,      Sign|Encrypt,    reopen,       SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
