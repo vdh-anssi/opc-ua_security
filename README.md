@@ -39,31 +39,31 @@ These experiments have been conducted on a standard laptop with 15 GiB or RAM (e
 `--not_fixed` indicates that the server's thumbprint is not included in ECC mode.
 `-c` specifies the configuration.
 The attack is found and reconstructed in less than 10s, and depicted in the file `output/trace1.pdf`.
-This scenario is very close to the one described in the paper in §5.1 and illustrated in Appendix §B.1, figure 10.
+This scenario is very close to the one described in the paper in §5.1 and illustrated in eprint Appendix §C.1, Figure 11.
 
 §5.1 Race condition for user contexts breaking Agr[C->S]:
  - `$ python3 opcua.py -q "3.2.race" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, no_leaks" --html`
 "3.2.race" is the initial Agr[C->S] property discussed in the paper.
 The attack is found and reconstructed in less than 10s, and depicted in the file `output/trace1.pdf`.
-This scenario is mentioned in the paper in Appendix §B.1 as an adaptation of the previous attack but on user responses.
+This scenario is mentioned in the eprint in Appendix §C.1 as an adaptation of the previous attack but on user responses.
 
 §5.2 ECC client impersonation attack:
 - `$ python3 opcua.py -q "3.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --html --not_fixed`
 "3.1" is Agr-[S->C], weakened to tolerate race conditions and KCI attacks.
 The attack is found and reconstructed in less than 10s, and depicted in the file `output/trace1.pdf`.
-This scenario is very close to the one described in the paper in §5.2 and illustrated in Appendix §B.2, figure 11.
+This scenario is very close to the one described in the paper in §5.2 and illustrated in Figure 5 and in eprint Appendix §C.2, Figure 12.
 See below how we can establish a security proof for Agr-[S->C] when our fix is used.
 
 §5.3 KCI User Impersonation attack:
 - `$ python3 opcua.py -q "3.1.KCI_UI" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --html`
 The attack is found and reconstructed in less than 5s, and depicted in the file `output/trace1.pdf`.
-This scenario is very close to the one described in the paper in §5.3 and illustrated in Appendix §B.3, figure 16.
+This scenario is very close to the one described in the paper in §5.3 and illustrated in Figure 6.
 
 §5.4 Session hijack by reopening:
 - `$ python3 opcua.py -q "3.1.reopen" -c "ECC, Sign, reopen, SSec, cert, no_switch, lt_leaks" --html`
 The attack is found and reconstructed in less than 30m, and depicted in the file `output/trace1.pdf`.
 (In RSA, it takes only 50s, and it is depicted in the file `output/trace2.pdf`).
-This scenario is very close to the one described in the paper in §5.4 and illustrated in Appendix §B.4, figure 12.
+This scenario is very close to the one described in the paper in §5.4 and illustrated in Figure 7.
 
 §5.5 KCI session and user confusion:
 - `$ python3 opcua.py -q "3.1.confusion" -c "RSA, Encrypt, reopen, SSec, cert, no_switch, lt_leaks" --html --no_reconstruction`
@@ -74,12 +74,12 @@ In the file `output/index.html`, a reachable goal shows that Proverif is able to
 The "Derivation" (file `output/derivation1.html`) shows that:
  - "SAtoken_13" was given by the client to the attacker, that impersonated the compromised server (thanks to the leak of the server secret key S_sk_3), through a legitimate activation request for a user "usr_9". (It could have been any request in fact).
  - "usr_8" is not known to the server and does not appear in any derivation of a server event.
-This scenario is very close to the one described in the paper in §5.5 and illustrated in Appendix §B.5, figure 15.
+This scenario is very close to the one described in the paper in §5.5 and illustrated in Figure 8.
 
 §5.6 Downgrade of password secrecy:
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, Encrypt, no_reopen, SSec, pwd, no_switch, ch_leaks" --html`
 The attack is found and reconstructed in less than 25s, and depicted in the file `output/trace1.pdf`.
-This scenario is very close to the one described in the paper in Appendix §B.6.1.
+This scenario is mentioned in the paper in §5.6 in the eprint in Appendix §C.4.1.
 Note that the property is true in mode "Sign" instead of "Encrypt".
 
 §5.6 Risk of Signature Oracle:
@@ -87,7 +87,7 @@ Note that the property is true in mode "Sign" instead of "Encrypt".
 `--oracle` indicates that the client certificate is not parsed (leading to the signature oracle), as tolerated by the OPC UA specification for "No Application Authentication" in version 1.05.03.
 The attack is found and reconstructed in less than 25m, and depicted in the file `output/trace1.pdf`.
 It shows an attack against the user password that is made through the use of the Signature Oracle, when No Application Authentication (SNoAA) is used.
-The Signature Oracle is described in the paper in Appendix §B.6.2 and illustrated in figure 14.
+The Signature Oracle is mentioned in the paper in §5.6, described in eprint Appendix §B.6.2 and illustrated in Figure 14.
 Note that the security property Conf[Pwd] is true when our fix is used, i.e. when no signature oracle is allowed (without `--oracle`).
 
 
