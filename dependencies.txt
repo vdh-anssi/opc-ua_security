@@ -1,4 +1,19 @@
-3.1
+# Property Dependencies
+
+> A Comprehensive Formal Security Analysis of OPC UA
+> Vincent Diemunsch, Lucca Hirschi, Steve Kremer.
+> Université de Lorraine, CNRS, Inria, LORIA, France.
+
+This file contains the dependency graph of the formal model of opcua-jinja.pv.
+Indeed, the novel proof methodology for ProVerif, presented in Section 4.3.2,
+requires, for the proof of a formal property to be sound, all its dependencies
+to be also proven.
+
+The dependencies are shown as trees: a given node is proven only when all the sub-nodes from descendants (including the target node itself) have been proven as queries.
+
+## Agr-[S->C]
+
+3.1 (called Agr-[S->C] in the paper)
  |- 3.1.A
  |   |- 3.1.C
  |   |- 3.1.axioms in ECC
@@ -28,8 +43,9 @@
  |- 3.1.conf
  O
 
+## Agr-[C->S]
 
-3.2
+3.2 (called Agr-[C->S] in the paper)
  |- 3.1.A (necessary for reopen)
  |   |- 3.1.C
  |   |- 3.1.axioms in ECC

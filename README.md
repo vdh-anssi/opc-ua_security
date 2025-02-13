@@ -5,9 +5,9 @@ This file describes the companion artifact of the USENIX Security 2025 paper of 
 Full version of this paper on IACR eprint at https://eprint.iacr.org/2025/148.
 
 It gives detailed instructions on how to use ProVerif to:
- - find attacks and get detailed attack traces as PDF files
- - prove that our fixes provably repair the protocols for the configurations for which we found the attacks
- - prove the properties in the fixed variant for further configurations
+ - find attacks and get detailed attack traces as PDF files,
+ - prove that our fixes provably repair the protocols for the configurations for which we found the attacks,
+ - prove the properties in the fixed variant for further configurations,
  - launch lattice exploration campaigns.
 
 
@@ -30,18 +30,18 @@ Results in this file have been obtained with Proverif development, branch improv
 > Vincent Cheval, Véronique Cortier and Alexandre Debant. "Election Verifiability with ProVerif." IEEE 36th Computer Security Foundations Symposium (CSF). 2023.
 
 Make sure that the proverif executable is in your path and available from the command line.
-You also need Python 3.11 (or above) with Jinja2 (https://pypi.org/project/Jinja2/), to run the tool "opcua.py", that generates the input files and launch proverif.
- - `$ pip install jinja2`
-
+You also need Python 3.11 (or above) with Jinja2 (https://pypi.org/project/Jinja2/), to run the tool "opcua.py", that generates the input files and launches proverif.
+ - `$ pip3 install jinja2`
 
 # To reproduce the automatic attack finding described in the paper
 
-These experiments have been conducted on a standard laptop with 15 GiB or RAM (except query 3.1.B that requires at least 30 GiB in ECC).
+These experiments have been conducted on a standard laptop with 15 GiB or RAM. 
+
+We provide a script (`$ ./reproduce_attacks.sh`) to launch all the commands below automatically. The produced results are stored in the directories `output_xxx` where `xxx` refers to the name of the attack. The total time for reproducing all the attacks is about 30 mins.
 
 §5.1 Race condition for user contexts breaking Agr[S->C]:
  - `$ python3 opcua.py -q "3.1.race" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, no_leaks" --html`
 "3.1.race" is the initial Agr[S->C] property discussed in the paper.
-`--not_fixed` indicates that the server's thumbprint is not included in ECC mode.
 `-c` specifies the configuration.
 The attack is found and reconstructed in less than 10s, and depicted in the file `output/trace1.pdf`.
 This scenario is very close to the one described in the paper in §5.1 and illustrated in eprint Appendix §C.1, Figure 11.
@@ -55,6 +55,7 @@ This scenario is mentioned in the eprint in Appendix §C.1 as an adaptation of t
 §5.2 ECC client impersonation attack:
 - `$ python3 opcua.py -q "3.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --html --not_fixed`
 "3.1" is Agr-[S->C], weakened to tolerate race conditions and KCI attacks.
+`--not_fixed` indicates that the server's thumbprint is not included in ECC mode.
 The attack is found and reconstructed in less than 10s, and depicted in the file `output/trace1.pdf`.
 This scenario is very close to the one described in the paper in §5.2 and illustrated in Figure 5 and in eprint Appendix §C.2, Figure 12.
 See below how we can establish a security proof for Agr-[S->C] when our fix is used.
@@ -64,15 +65,21 @@ See below how we can establish a security proof for Agr-[S->C] when our fix is u
 The attack is found and reconstructed in less than 5s, and depicted in the file `output/trace1.pdf`.
 This scenario is very close to the one described in the paper in §5.3 and illustrated in Figure 6.
 
-§5.4 Session hijack by reopening:
-- `$ python3 opcua.py -q "3.1.reopen" -c "ECC, Sign, reopen, SSec, cert, no_switch, lt_leaks" --html`
-The attack is found and reconstructed in less than 30m, and depicted in the file `output/trace1.pdf`.
-(In RSA, it takes only 50s, and it is depicted in the file `output/trace2.pdf`).
+§5.4 Session hijack by reopening / switching:
+- `$ python3 opcua.py -q "3.1.reopen" -c "RSA, Sign, reopen, SSec, cert, no_switch, lt_leaks" --html`
+The attack is found and reconstructed in less than 50s, and depicted in the file `output/trace2.pdf`.
+(In ECC, it takes less than 30m, and the attack is depicted in the file `output/trace1.pdf`).
 This scenario is very close to the one described in the paper in §5.4 and illustrated in Figure 7.
+
+- `$ python3 opcua.py -q "3.1.reopen" -c "RSA, Sign, no_reopen, SSec, cert, switch, lt_leaks" --html`
+The variant that allows session switching (rather than channel reopening) is found and reconstructed in less than 20s, and depicted in the file `output/trace1.pdf`.
+(In ECC, it takes less than 1m, and the attack is depicted in the file `output/trace1.pdf`).
+This scenario is very close to the one described in the paper in §5.4 and illustrated in eprint Appdendix §C.3, Figure 13.
 
 §5.5 KCI session and user confusion:
 - `$ python3 opcua.py -q "3.1.confusion" -c "RSA, Encrypt, reopen, SSec, cert, no_switch, lt_leaks" --html --no_reconstruction`
 The attack is found in less than 03s, but Proverif cannot reconstruct it and terminates with "cannot be proved".
+`--no_reconstruction` prevent a seemingly infinite delay due to reconstruction attempts.
 In the file `output/index.html`, a reachable goal shows that Proverif is able to construct a clause that contradicts the query:
  - the server has received a user request "C_val_4" in a session called "s_2" authenticated by "SAtoken_13", that is currently hold by user "usr_7"
  - the client has sent the same user request "C_val_4", but in a session called "id_131" also authenticated by "SAtoken_13", for a user called "usr_8"
@@ -119,8 +126,14 @@ Proofs for this property requires to first prove a number of lemmas that we assu
  - `$ python3 opcua.py -q "3.1"          -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (30s)
 As we are able to prove this main query "3.1" corresponding to Agr-[S->C], we show that our fixes resolve the attack that was found in the same configurations (see above §5.2 ECC client impersonation attack with "--not_fixed"). Other configurations can be proven too (see `results.md`).
 
+To ease the verification, the same commands can be automatically launched by the script `reproduce_proofs.py`:
+ - `$ python3 reproduce_proofs.py -q "Agr-[S->C]" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --reverse`
+(`--reverse` means that we start with 3.1.conf and not with 3.1)
+
+
 ##  For the weakened property Agr-[C->S]
 Similarly, the query "3.2" relies on "3.2.axioms", "3.2.A", but also on "3.1.A" and "3.1.C". When "ECC" is present in the configuration, we also prove "3.1.axioms" (because "3.1.A" and "3.1.C" assume "3.1.axioms" in that case; see `dependencies.txt`).
+One should launch:
  - `$ python3 opcua.py -q "3.1.axioms" -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (6s)
  - `$ python3 opcua.py -q "3.1.A"      -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (1m)
  - `$ python3 opcua.py -q "3.1.C"      -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (1s)
@@ -128,6 +141,8 @@ Similarly, the query "3.2" relies on "3.2.axioms", "3.2.A", but also on "3.1.A" 
  - `$ python3 opcua.py -q "3.2.A"      -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (1s)
  - `$ python3 opcua.py -q "3.2"        -c "ECC, Encrypt, no_reopen, SSec, cert, no_switch, lt_leaks"` (8s)
 As we are able to prove this main query "3.2" corresponding to Agr-[C->S]. Other configurations can be proven too (see `results.md`).
+
+As explained above, the script `reproduce_proofs.py` automates this task and ease the verification of Agr-[C->S].
 
 ## For the property Conf[Pwd]:
 Password confidentiality when no signature oracle is allowed (i.e., we enforce parsing of certificates even when SessionSecurity includes SNoAA):

@@ -12,11 +12,11 @@ config["reopen"] = False
 config["switch"] = False
 config["leaks"]  = ["no_leaks", "ch_leaks", "lt_leaks"]
 
-authenticated = False # Authenticated cryptography in ECC.
+authenticated = False # Authenticated cryptography in ECC. False by default as it is left as future work.
 KCI = True # Key Compromise Impersonation of user authenticated by certificate.
            # True, since the fix we designed for the KCI attack is not yet accepted/standardized.
 oracle = False # ECC signature oracle. False by default since the fix we designed is accepted.
-fixed = True # Fixed ECC client impersonation attack. True since by default since the fix we designed is accepted.
+fixed = True # Fixed ECC client impersonation attack. True by default since the fix we designed is accepted.
 
 queries = {}
 proverif = {}

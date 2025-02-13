@@ -1,6 +1,8 @@
-# This is a proof script for opcua.pv on ProVerif.
-# usage :
-#  $ python3.11 prove.py -q "1.2.2" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNone|SSec, anon|pwd|cert, switch, leaks" -t 300 -s previous.txt --skip -p 5 | tee results.txt
+# This is a proof script for OPC UA on ProVerif, that performs a lattice exploration of the given configuration.
+# It calls opcua.py to generate the input files and launch ProVerif.
+#
+# usage:
+#  $ python3 prove.py -q "3.2" -c "RSA|ECC, None|Sign|Encrypt, no_reopen, SNone|SSec, anon|pwd|cert, no_switch, lt_leaks" -t 300 -p 5 | tee results.txt
 #  $ cat results.txt
 
 from configurations import *
@@ -56,7 +58,9 @@ if  QUERY == "3.1.all":
    QUERIES = ["3.1", "3.1.A", "3.1.B", "3.1.C", "3.1.D", "3.1.E", "3.1.axioms", "3.1.axioms.1", "3.1.conf"]
    print("ies: " + ', '.join(QUERIES), end='')
 elif QUERY == "3.2.all":
-   QUERIES = ["3.2", "3.2.A", "3.2.axioms", "3.1.A", "3.1.C", "3.1.axioms"]
+   QUERIES = ["3.2", "3.2.A", "3.2.axioms", "3.1.A", "3.1.C"]
+   if "ECC" in args.config:
+      QUERIES += ["3.1.axioms"]
    print("ies: " + ', '.join(QUERIES), end='')
 else:
    QUERIES = [QUERY]

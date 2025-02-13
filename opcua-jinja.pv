@@ -1550,7 +1550,7 @@ let SC2 = chan(c_cert, s_cert, mode2, ch2, SK2) in
 
 (* 3.1.axioms *)
 (*{ if fixed and ("3.1.axioms" in queries["list"]
-  or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]  
+  or "3.1" in queries["list"] or "3.1.B" in queries["list"] or "3.1.D" in queries["list"] or "3.1.E" in queries["list"]
   or (("3.1.A" in queries["list"] or "3.1.C" in queries["list"]) and "ECC" in config["crypto"])) }*)
 (*{ if not "3.1.axioms" in queries["list"] }*) axiom (*{ else }*) query (*{ endif }*)
 srv:pkey; event(leaked_server(srv)) ==> event(leaked(srv)).

@@ -1,8 +1,8 @@
 A Formal Security Analysis of OPC UA.
 =====================================
 
-See the file README.md for detailed instruction on how to use proverif.
-We present here, for each security properties, some configurations for which we have proofs. Those configurations are maximal with respect to the timeout we used and explicitly indicate.
+See the file `README.md` for detailed instruction on how to use ProVerif.
+We present here, for each security property, some configurations for which we have proofs. Those configurations are maximal with respect to the timeout we used and explicitly indicate. They cover sufficiently many configurations to back up our claims from the companion paper.
 
 
 # Confidentiality Properties
@@ -64,11 +64,12 @@ The claim 1. is supported by the results mentioned here and detailed in the READ
 
 The claim 2. is supported by the results we obtained through lattice exploration campaigns results we report on below and that can be reproduced as explained in the README.md file.
 
-##  Summary of results for the weakened property Agr-[S->C]
+##  Summary of results for the weakened agreement property Agr-[S->C]
 
 Property "3.1" refers to the weakened Agr-[S->C] (to tolerate the KCI attacks and race condition).
 As explained in the paper, we use a series of lemmas and advanced techniques that depend on the set of sub-lemmas that need to be proven.
-According to the file `dependencies.txt`, to prove the weakened property Agr-[S->C] we need to prove the following queries: "3.1.axioms", "3.1.axioms.1", "3.1.conf", "3.1.A", "3.1.B", "3.1.C", "3.1.D", "3.1.E", and finally "3.1" that relies on all of those other lemmas.
+According to the file `dependencies.txt`, to prove the weakened property Agr-[S->C] we need to prove the following queries:
+"3.1.axioms", "3.1.axioms.1", "3.1.conf", "3.1.A", "3.1.B", "3.1.C", "3.1.D", "3.1.E", and finally "3.1" that relies on all of those other lemmas.
  - `$ python3 opcua.py -q "3.1.axioms"   -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (8s)
  - `$ python3 opcua.py -q "3.1.axioms.1" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1s)
  - `$ python3 opcua.py -q "3.1.conf"     -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1s)
@@ -78,30 +79,50 @@ According to the file `dependencies.txt`, to prove the weakened property Agr-[S-
  - `$ python3 opcua.py -q "3.1.D"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (4s)
  - `$ python3 opcua.py -q "3.1.E"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
  - `$ python3 opcua.py -q "3.1"          -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (30s)
-
 In particular this shows the absence of the impersonation attack that was found on configuration "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks".
+To ease the verification, the same commands can be automatically launched by the script `reproduce_proofs.py`:
+ - `$ python3 reproduce_proofs.py -q "Agr-[S->C]" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --reverse`
+(`--reverse` means that we start with 3.1.conf and not with 3.1)
 
-Examples of configurations, where all lemmas and the property are proven (verification time is given for the longest query):
- - ECC|RSA, None,                 reopen, SNoAA,      anon,             switch, no_leaks (3.1.B 5s)
+In the following configurations, all lemmas and the property are proven. We give the query that requires the longest verification time.
+
+Maximal configurations without long-term key leaks, with "reopen" or "switch":
  - ECC|RSA, None|Sign|Encrypt,    reopen, SNoAA,      anon|pwd|cert, no_switch, no_leaks (3.1 4h)
  - ECC|RSA, None|Sign|Encrypt,    reopen,       SSec, anon|pwd|cert, no_switch, no_leaks (3.1 4h)
- - ECC|RSA,      Sign|Encrypt,    reopen,       SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
  - ECC|RSA, None|     Encrypt, no_reopen, SNoAA,           pwd|cert,    switch, no_leaks (3.1.B 9m)
  - ECC|RSA, None|     Encrypt, no_reopen,       SSec, anon|pwd|cert,    switch, no_leaks (3.1.B 2h)
- - RSA, None|Sign,    no_reopen,       SSec, anon|    cert, no_switch, lt_leaks (3.1.axioms 7m)
+
+Maximal configurations without long-term key leaks, but with "reopen" and "switch":
+ - ECC|RSA, None,                 reopen, SNoAA,      anon|cert,        switch, no_leaks (3.1.B 3m)
+ - ECC|RSA,      Sign|Encrypt,    reopen,       SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
+
+Maximal configurations with long-term key leaks, and without "reopen" nor "switch":
+ - RSA, None|Sign,         no_reopen,       SSec, anon|    cert, no_switch, lt_leaks (3.1.axioms 7m)
  - ECC,               Encrypt, no_reopen, SNoAA,               cert, no_switch, lt_leaks (3.1.B 23h)
  - ECC,               Encrypt, no_reopen,       SSec,          cert, no_switch, lt_leaks (3.1.B 22h)
  - ECC,          Sign,         no_reopen, SNoAA,               cert, no_switch, lt_leaks (3.1.B 09h)
 
 
-##  Summary of results for the weakened property Agr-[C->S]
+##  Summary of results for the weakened agreement property Agr-[C->S]
 
-Similarly, property "3.2" refers to the weakened version of Agr-[C->S]. Its proof relies on "3.2.axioms", "3.2.A", but also on "3.1.A" and "3.1.C". When "ECC" is present in the configuration, we should also prove "3.1.axioms" (because "3.1.A" and "3.1.C" assume "3.1.axioms" in that case; see `dependencies.txt`).
+Similarly, property "3.2" refers to the weakened version of Agr-[C->S].
+Its proof relies on "3.2.axioms", "3.2.A", "3.1.A" and "3.1.C". Moreover, when "ECC" is present in the configuration,
+we should also prove "3.1.axioms" (because "3.1.A" and "3.1.C" assume "3.1.axioms" in that case; see `dependencies.txt`).
+As explained above, the script `reproduce_proofs.py` automates this task and ease the verification of Agr-[C->S].
 
-Examples of configurations, where all lemmas and the property are proven:
- - ECC|RSA, None|Sign|Encrypt, no_reopen,       SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 1m)
+In the following configurations, all lemmas and the property are proven. We give the query that requires the longest verification time.
+
+Maximal configurations without long-term key leaks, with "reopen" or "switch":
  - ECC|RSA, None|Sign|Encrypt,    reopen,       SSec, anon|pwd|cert, no_switch, no_leaks (3.1.axioms 4h)
  - ECC|RSA, None|Sign|Encrypt,    reopen, SNoAA,      anon|    cert, no_switch, no_leaks (3.1.axioms 3h)
+
+Maximal configurations without long-term key leaks, but with "reopen" and "switch":
+ - ECC|RSA, None,                 reopen,       SSec, anon|pwd|cert,    switch, no_leaks (3.1.A 1m)
+ - ECC|RSA,      Sign|Encrypt,    reopen,       SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
+
+Maximal configurations with long-term key leaks, and without "reopen" nor "switch":
+ - ECC,     None|Sign|Encrypt, no_reopen,       SSec,          cert, no_switch, lt_leaks (3.1.axioms 4h)
+
+Maximal configurations with long-term key leaks, and with "reopen" and "switch":
  - ECC|RSA, None,                 reopen,       SSec, anon|pwd|cert,    switch, lt_leaks (3.1.A 1h)
  - RSA, None|Sign,            reopen,       SSec, anon|pwd|cert,    switch, lt_leaks (3.1.A 42m)
- - ECC|RSA,      Sign|Encrypt,    reopen,       SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
