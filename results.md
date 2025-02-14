@@ -97,7 +97,7 @@ Maximal configurations without long-term key leaks, but with "reopen" and "switc
  - ECC|RSA,      Sign|Encrypt,    reopen,       SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
 
 Maximal configurations with long-term key leaks, and without "reopen" nor "switch":
- - RSA, None|Sign,         no_reopen,       SSec, anon|    cert, no_switch, lt_leaks (3.1.axioms 7m)
+ - RSA,     None|Sign,         no_reopen,       SSec, anon|    cert, no_switch, lt_leaks (3.1.axioms 7m)
  - ECC,               Encrypt, no_reopen, SNoAA,               cert, no_switch, lt_leaks (3.1.B 23h)
  - ECC,               Encrypt, no_reopen,       SSec,          cert, no_switch, lt_leaks (3.1.B 22h)
  - ECC,          Sign,         no_reopen, SNoAA,               cert, no_switch, lt_leaks (3.1.B 09h)
@@ -118,6 +118,7 @@ Maximal configurations without long-term key leaks, with "reopen" or "switch":
 
 Maximal configurations without long-term key leaks, but with "reopen" and "switch":
  - ECC|RSA, None,                 reopen,       SSec, anon|pwd|cert,    switch, no_leaks (3.1.A 1m)
+ - ECC|RSA, None,                 reopen, SNoAA,      anon|pwd|cert,    switch, no_leaks (3.1.B 4h)
  - ECC|RSA,      Sign|Encrypt,    reopen,       SSec,          cert,    switch, no_leaks (3.1.axioms 17m)
 
 Maximal configurations with long-term key leaks, and without "reopen" nor "switch":
@@ -125,4 +126,5 @@ Maximal configurations with long-term key leaks, and without "reopen" nor "switc
 
 Maximal configurations with long-term key leaks, and with "reopen" and "switch":
  - ECC|RSA, None,                 reopen,       SSec, anon|pwd|cert,    switch, lt_leaks (3.1.A 1h)
- - RSA, None|Sign,            reopen,       SSec, anon|pwd|cert,    switch, lt_leaks (3.1.A 42m)
+ - RSA,     None|Sign,            reopen,       SSec, anon|pwd|cert,    switch, lt_leaks (3.1.A 42m)
+ - RSA,     None|Sign,            reopen, SNoAA,      anon|pwd|cert,    switch, lt_leaks (3.2 2h)
