@@ -15,36 +15,51 @@ The configurations we list here support those claims.
 ## For the property Conf[C]:
 Maximal configurations (including "switch") when the Security Policy is RSA:
  - `$ python3 opcua.py -q "Conf[C]" -c "RSA, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, switch, lt_leaks"` (1m)
+
 Maximal configurations (including "switch"), but no key leaks when the Security Policy is ECC:
  - `$ python3 opcua.py -q "Conf[C]" -c "ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, switch, no_leaks"` (10s)
+
 Maximal configurations except when "switch" is disabled:
  - `$ python3 opcua.py -q "Conf[C]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, no_switch, lt_leaks"` (9m)
+
 Maximal configurations except when "reopen" (and "SNoAA") is disabled:
  - `$ python3 opcua.py -q "Conf[C]" -c "RSA|ECC, None|Sign|Encrypt, no_reopen, SSec, anon|pwd|cert, switch, lt_leaks"` (8m)
+
 
 ## For the property Conf[S]:
 Maximal configurations (including "switch") when the Security Policy is RSA:
  - `$ python3 opcua.py -q "Conf[S]" -c "RSA, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, switch, lt_leaks"` (7m)
+
 Maximal configurations (including "switch"), but no key leaks when the Security Policy is ECC:
  - `$ python3 opcua.py -q "Conf[S]" -c "ECC, Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, switch, no_leaks"` (20s)
+
 Maximal configurations except when "switch" is disabled:
  - `$ python3 opcua.py -q "Conf[S]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, anon|pwd|cert, no_switch, lt_leaks"` (40m)
+
 Maximal configurations in ECC with "reopen", "switch" and key leaks:
  - `$ python3 opcua.py -q "Conf[S]" -c "ECC, Encrypt, reopen, SNoAA, pwd|cert, switch, lt_leaks"` (05h)
+ - `$ python3 opcua.py -q "Conf[S]" -c "ECC, Sign,    reopen, SSec,  pwd|cert, switch, lt_leaks"` (07m)
+
 Maximal configurations except when "reopen" (and "SNoAA") is disabled:
  - `$ python3 opcua.py -q "Conf[S]" -c "ECC, Sign|Encrypt, no_reopen, SSec, anon|pwd|cert, switch, lt_leaks"` (9h)
+
 
 ## For the property Conf[Pwd]:
 Configuration with long-term key leaks, but no channel leaks:
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, Encrypt, no_reopen, SSec, pwd, no_switch, lt_leaks"` (1s)
+
 Password confidentiality when no signature oracle is allowed (i.e., we enforce parsing of certificates even when SessionSecurity includes SNoAA):
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None, reopen, SNoAA|SSec, pwd, switch, lt_leaks"`: (1m)
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "RSA|ECC, None|Sign|Encrypt, reopen, SNoAA|SSec, pwd, switch, no_leaks"` (2m)
+
 In a subset of this configuration an attack was found using `--oracle`. The version 1.05.04 RC with our fix to the signature oracle attack is obtained without `--oracle` and can be proven secure with the command just above.
+
 Maximal configurations in RSA except when "switch" (and "SSec") is disabled:
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "RSA, None|Sign|Encrypt, reopen, SNoAA, pwd, no_switch, lt_leaks"` (8m)
+
 Maximal configurations in RSA except when "reopen" (and "SSec") is disabled:
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "RSA, None|Sign|Encrypt, no_reopen, SNoAA, pwd, switch, lt_leaks"` (1m)
+
 Maximal configurations in ECC except when "reopen" and "switch" are disabled:
  - `$ python3 opcua.py -q "Conf[Pwd]" -c "ECC, None|Sign|Encrypt, no_reopen, SNoAA|SSec, pwd, no_switch, lt_leaks"` (1h)
 
@@ -79,6 +94,7 @@ According to the file `dependencies.txt`, to prove the weakened property Agr-[S-
  - `$ python3 opcua.py -q "3.1.D"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (4s)
  - `$ python3 opcua.py -q "3.1.E"        -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (1m)
  - `$ python3 opcua.py -q "3.1"          -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks"` (30s)
+
 In particular this shows the absence of the impersonation attack that was found on configuration "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks".
 To ease the verification, the same commands can be automatically launched by the script `reproduce_proofs.py`:
  - `$ python3 reproduce_proofs.py -q "Agr-[S->C]" -c "ECC, Encrypt, no_reopen, SNoAA, cert, no_switch, lt_leaks" --reverse`
