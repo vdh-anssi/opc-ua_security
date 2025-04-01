@@ -337,10 +337,10 @@ letfun CH_check_dec(CH_m: bitstring, mode: chmode, crypto: cryptography, R_sk: s
    ).
 
 (* Symmetric encryption with HMAC                              *)
-(* None:    header,                      body                  *)
+(* None:    header,                       body                 *)
 (* Sign:    header,        ssign((header, body), I_mk)         *)
 (* Encrypt: header,   senc(ssign((header, body), I_mk), I_ek) :   unauthenticated encryption *)
-(* Encrypt: header, sae_enc_sign((header, body), I_ek)        :   authenticated encryption *)
+(* Encrypt: header, sae_enc_sign((header, body), I_ek)        :     authenticated encryption *)
 
 letfun CH_mac_enc(CH_m: bitstring, mode: chmode, ek: sekey, mk: sskey) =
    let CH(header: CH_header, payload: CH_payload) = CH_m in
@@ -700,8 +700,7 @@ let User_Request (usr: login) =
    if C_pk = get_pk(C_cert) && S_pk = get_pk(S_cert) then
    new RqID[S_pk, id, usr]: nonce; out(c, RqID);
    let C_sess = sess(C_pk, S_pk, SC, mode, check, id, SAtoken) in
-   (* We let the attacker choose the value of the user request *)
-   new C_val: nonce;
+   new C_val: nonce; (* The client creates a unique request *)
    let crypto = get_crypto(C_cert) in
    event C_data(C_pk, S_pk, crypto, mode, id, C_val);
    event C_User_Request(C_pk, S_pk, mode, C_sess, usr, pk(sk_of(usr)), C_val);
@@ -970,8 +969,7 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
       event secret_exp(S_er);
       let S_sess = sess(C_pk, S_pk, SC, mode, check, id, SAtoken) in
       event S_User_Request(C_pk, S_pk, mode, S_sess, usr, pk(sk_of(usr)), C_val);
-      (* We let the attacker choose the value of the user request *)
-      new S_val: nonce;
+      new S_val: nonce;  (* The server creates a unique response *)
       event S_Request(usr, C_val, S_val);
       event S_data(C_pk, S_pk, crypto, mode, id, S_val);
       event S_User_Response(C_pk, S_pk, mode, S_sess, usr, pk(sk_of(usr)), S_val);
@@ -980,7 +978,7 @@ let Server(S_sk: skey, S_cert: certificate, crypto: cryptography, mode: chmode, 
  ).
 
 
-(* Restriction to express freshness of request ID *)
+(* Restriction to express freshness of RqID that represents (SequenceNumber, RequestId) *)
 restriction src: pkey, rqid: nonce, i,j: nonce;
    event(Check_RqID(src, rqid, i)) && event(Check_RqID(src, rqid, j)) ==> i = j.
 
